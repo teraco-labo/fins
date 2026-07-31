@@ -968,27 +968,47 @@ function render() {
 }
 
 /**
- * 起動データを取る。まず1往復で済む api_boot を試し、
- * サーバー側が古くて未対応なら以前の3往復の呼び方に落とす。
+ * 起動データを取る。
+ * まず1往復で済む api_boot を試し、サーバーが未対応なら以前の呼び方に落とす。
+ * 未対応だと分かったら覚えておいて、次からは無駄な1往復をしない。
+ * また最初の表示に要るのは当月ぶんだけなので、翌月は描画のあとに取りに行く。
  */
-function fetchBoot(ym) {
-  return api('api_boot', [ym]).catch(function (e) {
-    var next = shiftYm(ym, 1);
-    return Promise.all([
-      api('api_bootstrap', []),
-      api('api_getMonth', [ym]),
-      api('api_getMonth', [next])
-    ]).then(function (rs) {
-      var ov = {};
-      [rs[1], rs[2]].forEach(function (r) {
-        Object.keys(r.overrides || {}).forEach(function (d) { ov[d] = r.overrides[d]; });
-      });
-      return {
-        households: rs[0].households, activities: rs[0].activities,
-        weekly: rs[1].weekly || {}, overrides: ov, months: [ym, next]
-      };
-    });
+var NOBOOT_KEY = 'fins-noboot';
+
+function knownNoBoot() {
+  try { return localStorage.getItem(NOBOOT_KEY) === '1'; } catch (e) { return false; }
+}
+
+function legacyBoot(ym) {
+  return Promise.all([
+    api('api_bootstrap', []),
+    api('api_getMonth', [ym])
+  ]).then(function (rs) {
+    return {
+      households: rs[0].households, activities: rs[0].activities,
+      weekly: rs[1].weekly || {}, overrides: rs[1].overrides || {}, months: [ym]
+    };
   });
+}
+
+function fetchBoot(ym) {
+  if (knownNoBoot()) return legacyBoot(ym);
+  return api('api_boot', [ym]).catch(function () {
+    try { localStorage.setItem(NOBOOT_KEY, '1'); } catch (e) { /* 無視 */ }
+    return legacyBoot(ym);
+  });
+}
+
+/** 翌月ぶんを後から足す。アドバイスの先読みに使う。 */
+function loadNextMonth() {
+  var ym = S.ym, next = shiftYm(ym, 1);
+  if (S.months && S.months.indexOf(next) >= 0) return Promise.resolve();
+  return api('api_getMonth', [next]).then(function (r) {
+    Object.keys(r.overrides || {}).forEach(function (d) { S.overrides[d] = r.overrides[d]; });
+    S.months = [ym, next];
+    render();
+    saveCache({ households: S.households, activities: S.activities, weekly: S.weekly, overrides: S.overrides, months: S.months });
+  }).catch(function () { /* 取れなくても当月だけで動く */ });
 }
 
 /** 表示中の月と翌月をまとめて読み込む（1往復）。 */
@@ -1223,6 +1243,7 @@ if (cached) {
 fetchBoot(S.ym).then(function (b) {
   saveCache(b);
   if (cached) { applyBoot(b); render(); } else { bootWith(b); }
+  loadNextMonth();
 }).catch(function (err) {
   if (cached) return; // 古い内容が出ているので黙って諦める
   document.getElementById('app').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
