@@ -992,11 +992,9 @@ function legacyBoot(ym) {
 }
 
 function fetchBoot(ym) {
-  if (knownNoBoot()) return legacyBoot(ym);
-  return api('api_boot', [ym]).catch(function () {
-    try { localStorage.setItem(NOBOOT_KEY, '1'); } catch (e) { /* 無視 */ }
-    return legacyBoot(ym);
-  });
+  // いまのサーバーに合わせて、確実に動く呼び方だけを使う。
+  // 1往復版（api_boot）はサーバー側の反映が済んでから戻す。
+  return legacyBoot(ym);
 }
 
 /** 翌月ぶんを後から足す。アドバイスの先読みに使う。 */
