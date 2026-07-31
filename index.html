@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+  :root {
+    --bg: #fbf7f0;
+    --card: #ffffff;
+    --line: #f0e7d9;
+    --line2: #e3d6c2;
+    --text: #453c31;
+    --muted: #a19584;
+    --faint: #bfb09a;
+    --accent: #e2795a;
+    --accent-soft: #fdeee7;
+    --ok: #2f7d5f;
+    --ok-bg: #e3f4ea;
+    --ok-mid: #a8dcc4;
+    --ok-full: #5cbb98;
+    --maybe: #a1691a;
+    --maybe-bg: #fdeedc;
+    --maybe-dot: #efb463;
+    --no: #b05252;
+    --no-bg: #fbe8e6;
+    --no-dot: #eb9c98;
+    --shadow: 0 1px 2px rgba(120, 95, 60, .05), 0 10px 26px rgba(120, 95, 60, .06);
+    --r-card: 20px;
+    --r-el: 13px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", -apple-system,
+      BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 16px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 500px; margin: 0 auto; padding: 0 14px 48px; }
+  header { display: flex; align-items: center; gap: 10px; padding: 20px 4px 14px; }
+  header .title { flex: 1; display: flex; align-items: baseline; gap: 8px; }
+  header h1 { font-size: 21px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  .badge {
+    width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 14px; font-weight: 600; flex: none;
+    border: none; cursor: pointer; font-family: inherit; padding: 0;
+    transition: transform .12s;
+  }
+  .badge:active { transform: scale(.92); }
+  .whos { display: flex; flex-direction: column; gap: 8px; }
+  .who {
+    display: flex; align-items: center; gap: 12px; padding: 13px 15px; border: none;
+    border-radius: var(--r-el); background: var(--bg); font-size: 16px; cursor: pointer;
+    font-family: inherit; color: var(--text); text-align: left; width: 100%;
+  }
+  .who.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .who .cl { width: 26px; height: 26px; border-radius: 50%; flex: none; color: #fff;
+    font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .me { font-size: 13px; color: var(--muted); }
+  nav {
+    display: flex; gap: 4px; background: var(--card); padding: 5px; border-radius: 999px;
+    margin-bottom: 14px; box-shadow: var(--shadow);
+  }
+  nav button {
+    flex: 1; padding: 11px 0; font-size: 14px; border: none; background: none;
+    color: var(--muted); border-radius: 999px; cursor: pointer; font-family: inherit;
+    transition: background .15s, color .15s;
+  }
+  nav button.on { background: var(--accent); color: #fff; }
+  #app { display: grid; gap: 14px; }
+  .card {
+    background: var(--card); border-radius: var(--r-card); padding: 16px 15px;
+    box-shadow: var(--shadow);
+  }
+  /* アドバイザー欄 */
+  .advice { display: flex; flex-direction: column; gap: 8px; }
+  .ad {
+    display: flex; align-items: flex-start; gap: 9px; padding: 13px 14px;
+    background: var(--accent-soft); border-radius: 15px; font-size: 14px;
+    line-height: 1.6; cursor: pointer;
+  }
+  .ad.flat { background: var(--bg); color: var(--muted); cursor: default; }
+  .ad .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 7px; flex: none; }
+  .ad.flat .dot { background: var(--line2); }
+  .ad b { font-weight: 600; }
+  .arow {
+    display: flex; align-items: baseline; gap: 10px; padding: 8px 0;
+    border-top: 1px solid var(--line); font-size: 14px;
+  }
+  .arow .an { width: 92px; flex: none; color: var(--muted); }
+  .arow .ay { color: var(--ok); font-weight: 600; }
+  .arow .ann { color: var(--faint); }
+  .monthbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .monthbar button {
+    border: none; background: var(--bg); font-size: 17px; color: var(--muted);
+    cursor: pointer; width: 34px; height: 34px; border-radius: 50%; line-height: 1; font-family: inherit;
+  }
+  .monthbar span { font-size: 17px; font-weight: 600; }
+  .dow, .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .dow div { text-align: center; font-size: 12px; color: var(--muted); padding-bottom: 6px; }
+  .dow div:first-child { color: var(--no); }
+  .dow div:last-child { color: #6d94c4; }
+  .cell {
+    aspect-ratio: 1 / 1; border-radius: 14px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
+    transition: transform .12s;
+  }
+  .cell:active { transform: scale(.94); }
+  .cell.empty { cursor: default; }
+  .cell.plain { background: var(--bg); }
+  .cell .n { font-size: 11px; font-weight: 600; line-height: 1.2; }
+  .cell .t { font-size: 9.5px; line-height: 1.2; opacity: .85; }
+  .mini { width: 78%; height: 5px; border-radius: 3px; background: var(--line); margin-top: 4px; position: relative; overflow: hidden; }
+  .mini i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+  .legend { display: flex; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+  .sw { width: 13px; height: 13px; border-radius: 5px; display: inline-block; vertical-align: -2px; margin-right: 5px; }
+
+  /* ポップアップ */
+  .ov {
+    position: fixed; inset: 0; background: rgba(70, 55, 35, .34); z-index: 20;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .ov[hidden] { display: none; }
+  .sheet {
+    background: var(--card); width: 100%; max-width: 540px; border-radius: 26px 26px 0 0;
+    padding: 18px 18px 26px; max-height: 90vh; overflow-y: auto;
+  }
+  .sheet header { padding: 0 0 10px; }
+  .sheet h2 { font-size: 19px; font-weight: 600; margin: 0; flex: 1; }
+  .close {
+    border: none; background: var(--bg); width: 32px; height: 32px; border-radius: 50%;
+    font-size: 15px; color: var(--muted); cursor: pointer; flex: none; font-family: inherit;
+  }
+  .sub { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  .sub b { color: var(--ok); font-weight: 600; }
+
+  /* 時間帯のタイムライン */
+  .tlwrap { margin-bottom: 6px; }
+  .tlrows { position: relative; }
+  .tlrow, .tlaxis { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; }
+  .tlrow { padding: 5px 0; }
+  .tlrow .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track { position: relative; height: 22px; background: var(--bg); border-radius: 7px; overflow: hidden; }
+  .track i { position: absolute; top: 0; bottom: 0; border-radius: 6px; }
+  .track .none { color: var(--faint); font-size: 11px; padding-left: 8px; line-height: 22px; }
+  .bandwrap { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
+  .bandwrap .bt { position: relative; }
+  .band { position: absolute; top: 0; bottom: 0; border-radius: 8px; box-shadow: inset 0 0 0 2px var(--accent); }
+  .tlaxis { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tlaxis .ax { display: flex; justify-content: space-between; }
+
+  /* 時間帯の編集 */
+  .rlist { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+  .ritem {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: var(--r-el); background: var(--bg); font-size: 15px;
+  }
+  .ritem .mk { font-size: 15px; }
+  .ritem .rm { margin-left: auto; border: none; background: none; color: var(--faint); cursor: pointer; font-size: 15px; font-family: inherit; }
+  .ritem.st-O { background: var(--ok-bg); color: var(--ok); }
+  .ritem.st-M { background: var(--maybe-bg); color: var(--maybe); }
+  .ritem.st-X { background: var(--no-bg); color: var(--no); }
+  .ritem .tg { font-size: 11.5px; opacity: .8; margin-left: 2px; }
+  .empty-note { font-size: 13px; color: var(--faint); padding: 14px 0; text-align: center; }
+  .cap { font-size: 12.5px; color: var(--muted); margin: 0 0 7px; }
+  .actsel { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
+  .actsel::-webkit-scrollbar { display: none; }
+  .actsel button {
+    flex: none; padding: 8px 14px; border-radius: 999px; border: none; background: var(--bg);
+    color: var(--muted); font-size: 13px; cursor: pointer; font-family: inherit; white-space: nowrap;
+  }
+  .actsel button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .presets { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+  .presets button {
+    padding: 8px 14px; border-radius: 999px; border: none; background: var(--bg);
+    color: var(--muted); font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  /* よく使う枠は大きめに。時刻を添えて説明をいらなくする */
+  .presets.big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .presets.big button {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 13px 4px; border-radius: var(--r-el); background: var(--ok-bg);
+    color: var(--ok); font-size: 15px; font-weight: 600; transition: transform .12s;
+  }
+  .presets.big button span { font-size: 11px; font-weight: 400; opacity: .75; }
+  .presets.big button:active { transform: scale(.95); }
+  .presets.big button.ng { background: var(--no-bg); color: var(--no); }
+  .more {
+    width: 100%; text-align: left; border: none; background: none; color: var(--muted);
+    font-size: 14px; font-family: inherit; cursor: pointer; padding: 8px 2px; margin-bottom: 4px;
+  }
+  .morebox {
+    background: var(--bg); border-radius: var(--r-el); padding: 12px 12px 4px; margin-bottom: 14px;
+  }
+  .morebox .addrow { margin-bottom: 10px; }
+  .morebox select, .morebox .stbtn, .morebox .add { background: var(--card); }
+  .link {
+    display: block; width: 100%; border: none; background: none; color: var(--muted);
+    font-size: 13px; font-family: inherit; cursor: pointer; padding: 14px 0 2px; text-align: center;
+    text-decoration: underline;
+  }
+  .addrow { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+  select, input[type=text] {
+    padding: 10px 8px; border: none; border-radius: var(--r-el); font-size: 15px;
+    font-family: inherit; background: var(--bg); color: var(--text); -webkit-appearance: none;
+    appearance: none; text-align: center;
+  }
+  select { flex: 1; min-width: 0; }
+  input[type=text] { width: 100%; text-align: left; padding-left: 14px; }
+  input[type=text]::placeholder { color: var(--line2); }
+  .addrow .stbtn {
+    border: none; background: var(--bg); color: var(--faint); width: 42px; height: 40px;
+    border-radius: var(--r-el); font-size: 16px; cursor: pointer; flex: none; font-family: inherit;
+  }
+  .addrow .stbtn.on-O { background: var(--ok-bg); color: var(--ok); }
+  .addrow .stbtn.on-M { background: var(--maybe-bg); color: var(--maybe); }
+  .addrow .add {
+    border: none; background: var(--text); color: #fff; padding: 0 16px; height: 40px;
+    border-radius: var(--r-el); font-size: 14px; cursor: pointer; flex: none; font-family: inherit;
+  }
+  .btn {
+    width: 100%; padding: 14px; border-radius: var(--r-el); border: none;
+    background: var(--accent); color: #fff; font-size: 15px; cursor: pointer;
+    font-family: inherit; margin-top: 12px; font-weight: 600;
+  }
+  .btn.ghost { background: var(--bg); color: var(--muted); font-weight: 400; }
+  .btn:disabled { opacity: .5; }
+  .wrow {
+    display: flex; align-items: center; gap: 10px; padding: 11px 4px;
+    border-top: 1px solid var(--line); cursor: pointer;
+  }
+  .wrow:first-of-type { border-top: none; }
+  .wrow .d { width: 26px; font-size: 15px; color: var(--muted); flex: none; }
+  .wrow .rs { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
+  .wrow .rs span { font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); }
+  .wrow .rs span.m { background: var(--maybe-bg); color: var(--maybe); }
+  .wrow .none { font-size: 12.5px; color: var(--faint); }
+  .wrow .go { color: var(--faint); font-size: 14px; }
+  .note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; line-height: 1.6; }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--text); color: #fff; padding: 11px 22px; border-radius: 999px;
+    font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30;
+  }
+  .toast.on { opacity: 1; }
+  .err { background: var(--no-bg); color: var(--no); padding: 14px; border-radius: var(--r-el); font-size: 15px; }
+  .tagline {
+    font-size: 10.5px; margin-left: 6px; padding: 2px 7px; border-radius: 999px;
+    background: var(--bg); color: var(--muted); vertical-align: 1px;
+  }
+
+  @media (min-width: 760px) {
+    body { font-size: 17px; }
+    .wrap { max-width: 660px; padding: 0 24px 64px; }
+    header { padding: 32px 4px 18px; }
+    header h1 { font-size: 27px; }
+    nav { max-width: 420px; }
+    .card { padding: 24px 22px; border-radius: 24px; }
+    .cell { font-size: 18px; border-radius: 16px; }
+    .cell .n { font-size: 12px; }
+    .cell .t { font-size: 11px; }
+    .monthbar span { font-size: 19px; }
+    .dow div { font-size: 13px; }
+    .ov { align-items: center; padding: 24px; }
+    .sheet { border-radius: 26px; max-height: 86vh; padding: 24px 26px 28px; }
+    .tlrow, .tlaxis, .bandwrap { grid-template-columns: 78px 1fr; }
+  }
+
+  /* 広い画面では余白を残さず使い切る。設計や確認はPCで行うため */
+  @media (min-width: 1000px) {
+    body { font-size: 18px; }
+    .wrap { max-width: 960px; padding: 0 28px 72px; }
+    header { padding: 40px 6px 22px; }
+    header h1 { font-size: 32px; }
+    header .tag { font-size: 14px; }
+    .badge { width: 42px; height: 42px; font-size: 17px; }
+    .me { font-size: 15px; }
+    nav { max-width: 520px; padding: 6px; }
+    nav button { padding: 13px 0; font-size: 16px; }
+    .card { padding: 28px 26px; border-radius: 28px; }
+    .chip { font-size: 15px; padding: 9px 18px; }
+    .monthbar { margin-bottom: 14px; }
+    .monthbar span { font-size: 22px; }
+    .monthbar button { width: 40px; height: 40px; font-size: 20px; }
+    .dow, .grid { gap: 8px; }
+    .dow div { font-size: 14px; padding-bottom: 8px; }
+    .cell { font-size: 22px; border-radius: 18px; }
+    .cell .n { font-size: 14px; }
+    .cell .t { font-size: 12px; }
+    .mini { height: 7px; margin-top: 6px; }
+    .legend { font-size: 13.5px; gap: 18px; margin-top: 18px; }
+    .note { font-size: 14px; }
+    .sheet { max-width: 660px; padding: 30px 32px 34px; }
+    .sheet h2 { font-size: 23px; }
+    .sub { font-size: 15px; }
+    .tlrow, .tlaxis, .bandwrap { grid-template-columns: 96px 1fr; gap: 12px; }
+    .tlrow { padding: 7px 0; }
+    .tlrow .nm { font-size: 15px; }
+    .track { height: 28px; }
+    .track .none { line-height: 28px; font-size: 12.5px; }
+    .tlaxis { font-size: 12.5px; }
+    .ad { font-size: 15.5px; padding: 15px 17px; border-radius: 17px; }
+    .arow { font-size: 15px; padding: 10px 0; }
+    .arow .an { width: 108px; }
+    .ritem { font-size: 17px; padding: 13px 16px; }
+    .presets button { font-size: 14.5px; padding: 10px 17px; }
+    select { font-size: 17px; padding: 12px 8px; }
+    .addrow .stbtn { width: 50px; height: 46px; font-size: 18px; }
+    .addrow .add { height: 46px; font-size: 15px; }
+    input[type=text] { font-size: 16px; padding: 13px 16px; }
+    .btn { font-size: 16px; padding: 16px; }
+    .wrow { padding: 14px 6px; }
+    .wrow .d { font-size: 17px; width: 30px; }
+    .wrow .rs span { font-size: 14px; padding: 4px 12px; }
+  }
+</style>
+<script>
+var GAS_API = "https://script.google.com/macros/s/AKfycbxfZL7yaQu02xWYvyH0aaxl3LpLE80qiyS5jlaXu6RdpjNqYlWNbTGhsNEZCbRFFQY/exec";
+window.__MOCK_API__ = new Proxy({}, {
+  get: function (_, fn) {
+    return function () {
+      var args = Array.prototype.slice.call(arguments);
+      return fetch(GAS_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ fn: fn, args: args })
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.error) throw new Error(j.error);
+        return j.result;
+      });
+    };
+  }
+});
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <button class="badge" id="badge" aria-label="家族を選ぶ"></button>
+    <div class="title"><h1>FINSカレンダー</h1></div>
+    <span class="me" id="me"></span>
+  </header>
+  <nav id="nav" hidden>
+    <button data-v="agg" class="on">みんなの予定</button>
+    <button data-v="mine">じぶんの予定</button>
+    <button data-v="weekly">いつも遊べる日</button>
+  </nav>
+  <div id="app"><p class="note">読み込み中…</p></div>
+</div>
+<div class="ov" id="ov" hidden><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+var PRE_ID = (new URLSearchParams(location.search)).get('h') || '';
+var ME_KEY = 'fins-me';
+
+/**
+ * 月ごとのファミリー向け行事。アドバイスに季節感を足すためのもの。
+ * 予定の判定には使わず、揃う日が見つかったときの「何をする？」の材料にする。
+ * 増やしたいときはこの表に足すだけでよい。
+ */
+var SEASON = {
+  1: ['初詣', '雪あそび', 'お正月あそび'],
+  2: ['豆まき', 'いちご狩り', '室内あそび'],
+  3: ['ひなまつり', 'お花見', '公園ピクニック'],
+  4: ['お花見', 'ピクニック', '潮干狩り'],
+  5: ['こどもの日', 'バーベキュー', 'いちご狩り'],
+  6: ['あじさい見物', '雨の日の室内あそび', 'ホタル観賞'],
+  7: ['夏祭り', '花火大会', 'プール', 'キャンプ'],
+  8: ['花火大会', '盆おどり', 'キャンプ', 'すいか割り'],
+  9: ['お月見', 'ぶどう狩り', '秋の公園あそび'],
+  10: ['紅葉狩り', 'ハロウィン', 'いも掘り'],
+  11: ['紅葉狩り', 'みかん狩り', '焼きいも'],
+  12: ['クリスマス会', 'もちつき', '年越しの集まり']
+};
+
+// 1日を30分刻みで扱う。06:00〜23:00 の範囲だけを対象にする。
+var DAY_S = 6 * 60, DAY_E = 23 * 60, STEP = 30;
+var NCELL = (DAY_E - DAY_S) / STEP;
+var MARK = { O: '◯', M: '△', X: '✕' };
+var DOW = ['日', '月', '火', '水', '木', '金', '土'];
+var PRESETS = [
+  ['午前', '09:00', '12:00'], ['午後', '13:00', '17:00'],
+  ['夜', '18:00', '21:00'], ['日中ずっと', '09:00', '17:00']
+];
+
+var S = {
+  me: null, households: [], activities: [], weekly: {}, overrides: {},
+  view: 'agg', ym: '', months: null
+};
+var M = null; // 開いているポップアップの状態
+
+function api(fn, args) {
+  return new Promise(function (res, rej) {
+    if (window.__MOCK_API__) {
+      try { res(window.__MOCK_API__[fn].apply(null, args)); } catch (e) { rej(e); }
+      return;
+    }
+    google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn].apply(null, args);
+  });
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function () { t.classList.remove('on'); }, 1600);
+}
+
+/* ---------- 時刻まわり ---------- */
+
+function pad(n) { return n < 10 ? '0' + n : String(n); }
+function t2m(t) { var p = String(t).split(':'); return Number(p[0]) * 60 + Number(p[1]); }
+function m2t(m) { return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+function ymOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+function dateStr(y, m, d) { return y + '-' + pad(m) + '-' + pad(d); }
+function parseYm(ym) { return { y: Number(ym.slice(0, 4)), m: Number(ym.slice(5, 7)) }; }
+function daysIn(ym) { var p = parseYm(ym); return new Date(p.y, p.m, 0).getDate(); }
+function firstDow(ym) { var p = parseYm(ym); return new Date(p.y, p.m - 1, 1).getDay(); }
+function weekdayOf(date) { return new Date(date + 'T00:00:00').getDay(); }
+function shiftYm(ym, delta) {
+  var p = parseYm(ym);
+  return ymOf(new Date(p.y, p.m - 1 + delta, 1));
+}
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+/** アクティビティ指定を並べ替えて文字列にしたもの。空なら「すべて」を表す */
+function actsKey(r) { return (r.acts || []).slice().sort().join(','); }
+function sameActs(a, b) { return actsKey(a) === actsKey(b); }
+
+/** 重なっている・隣り合っている、状態もアクティビティ指定も同じレンジをつなげる */
+function mergeRanges(list) {
+  var groups = {};
+  list.forEach(function (r) {
+    var key = r.st + '|' + actsKey(r);
+    (groups[key] = groups[key] || []).push(r);
+  });
+  var out = [];
+  Object.keys(groups).forEach(function (key) {
+    var same = groups[key].sort(function (a, b) { return t2m(a.s) - t2m(b.s); });
+    var cur = null;
+    same.forEach(function (r) {
+      if (cur && t2m(r.s) <= t2m(cur.e)) {
+        if (t2m(r.e) > t2m(cur.e)) cur.e = r.e;
+      } else {
+        cur = { s: r.s, e: r.e, st: r.st, acts: (r.acts || []).slice() };
+        out.push(cur);
+      }
+    });
+  });
+  return out.sort(function (a, b) { return t2m(a.s) - t2m(b.s); });
+}
+
+/**
+ * 新しいレンジを足す。
+ * 同じアクティビティ指定で状態だけ違う既存レンジは、重なった分を削って上書きする。
+ * アクティビティ指定が違うレンジ同士は、重なっていてもそのまま共存させる。
+ */
+function applyRange(list, nr) {
+  var a = t2m(nr.s), b = t2m(nr.e), out = [];
+  list.forEach(function (r) {
+    if (r.st === 'X') return;
+    if (r.st === nr.st || !sameActs(r, nr)) { out.push(r); return; }
+    var s = t2m(r.s), e = t2m(r.e);
+    if (e <= a || s >= b) { out.push(r); return; }
+    if (s < a) out.push({ s: r.s, e: m2t(a), st: r.st, acts: (r.acts || []).slice() });
+    if (e > b) out.push({ s: m2t(b), e: r.e, st: r.st, acts: (r.acts || []).slice() });
+  });
+  return mergeRanges(out.concat([nr]));
+}
+
+/* ---------- 空き枠の解決 ---------- */
+
+/** その日の登録があればそれを、なければ平常パターンを返す。どちらもなければ null（未回答）。 */
+function effective(hid, date) {
+  var ov = S.overrides[date] && S.overrides[date][hid];
+  if (ov) return { ranges: ov, over: true };
+  var w = S.weekly[hid] && S.weekly[hid][String(weekdayOf(date))];
+  if (w && w.length) return { ranges: w, over: false };
+  return { ranges: null, over: false };
+}
+
+/**
+ * 30分マスの配列に展開する。未回答なら null。
+ * a を渡すと、そのアクティビティ向けに登録されたレンジだけを見る。
+ * 登録はあるがその活動向けのものが無い場合は「参加しない」として空のマスを返す（未回答とは区別する）。
+ */
+function gridOf(hid, date, a) {
+  var eff = effective(hid, date);
+  if (!eff.ranges) return null;
+  var list = a ? eff.ranges.filter(function (r) {
+    return !r.acts || !r.acts.length || r.acts.indexOf(a.id) >= 0;
+  }) : eff.ranges;
+  var g = new Array(NCELL);
+  for (var i = 0; i < NCELL; i++) g[i] = '';
+  list.forEach(function (r) {
+    var a = Math.max(0, Math.floor((t2m(r.s) - DAY_S) / STEP));
+    var b = Math.min(NCELL, Math.ceil((t2m(r.e) - DAY_S) / STEP));
+    for (var i = a; i < b; i++) {
+      if (r.st === 'O') g[i] = 'O';
+      else if (r.st === 'M' && g[i] !== 'O') g[i] = 'M';
+      else if (r.st === 'X' && !g[i]) g[i] = 'X';
+    }
+  });
+  return g;
+}
+
+function actName(id) {
+  var a = S.activities.filter(function (x) { return x.id === id; })[0];
+  return a ? a.name : id;
+}
+
+/** その日にできるアクティビティ（季節で絞る）。川遊びは夏だけなど。 */
+function activitiesOn(date) {
+  var m = Number(date.slice(5, 7));
+  return S.activities.filter(function (a) {
+    if (!a.from || !a.to) return true;
+    return a.from <= a.to ? (m >= a.from && m <= a.to) : (m >= a.from || m <= a.to);
+  });
+}
+
+// a に null を渡すと「アクティビティを問わず集まれるか」の計算になる
+function joins(h, a) { return !a || h.activities.indexOf(a.id) >= 0; }
+/** 集計の母数。ゲスト家は代行枠なので入れない。 */
+function membersOf(a) { return S.households.filter(function (h) { return !h.guest && joins(h, a); }); }
+function guestsOf(a) { return S.households.filter(function (h) { return h.guest && joins(h, a); }); }
+function windowOf(a) { return a ? [t2m(a.ws), t2m(a.we)] : [DAY_S, DAY_E]; }
+function needOf(a) { return Math.max(1, Math.ceil((a ? a.minMin : 60) / STEP)); }
+function minOf(a) { return a ? a.min : Math.max(2, membersOf(null).length - 1); }
+
+/** counts の中から、長さ need 以上で「最も少ない値」が最大になる区間を探す */
+function bestWindow(counts, need) {
+  var best = { score: 0, s: -1, e: -1 };
+  for (var i = 0; i < counts.length; i++) {
+    var mn = Infinity;
+    for (var j = i; j < counts.length; j++) {
+      if (counts[j] < mn) mn = counts[j];
+      if (mn === 0) break;
+      if (j - i + 1 < need) continue;
+      if (mn > best.score || (mn === best.score && (j - i) > (best.e - best.s))) {
+        best = { score: mn, s: i, e: j };
+      }
+    }
+  }
+  return best;
+}
+
+/** その日いちばん多くの家族が揃う時間帯。a を渡すとそのアクティビティの条件で計算する。 */
+function summarize(date, a) {
+  var w = windowOf(a);
+  var i0 = Math.max(0, Math.floor((w[0] - DAY_S) / STEP));
+  var i1 = Math.min(NCELL, Math.ceil((w[1] - DAY_S) / STEP));
+  var hs = membersOf(a);
+  var grids = hs.map(function (h) { return gridOf(h.id, date, a); });
+  var counts = [];
+  for (var i = i0; i < i1; i++) {
+    var c = 0;
+    grids.forEach(function (g) { if (g && g[i] === 'O') c++; });
+    counts.push(c);
+  }
+  var bw = bestWindow(counts, needOf(a));
+  var res = {
+    act: a, count: 0, guest: 0, maybe: 0, total: hs.length, min: minOf(a),
+    un: grids.filter(function (g) { return !g; }).length
+  };
+  if (bw.score < 1) return res;
+
+  var a0 = i0 + bw.s, a1 = i0 + bw.e + 1;
+  function covers(g, st) {
+    if (!g) return false;
+    for (var i = a0; i < a1; i++) if (g[i] !== st) return false;
+    return true;
+  }
+  res.count = bw.score;
+  res.maybe = hs.filter(function (h, k) {
+    var g = grids[k];
+    if (!g || covers(g, 'O')) return false;
+    for (var i = a0; i < a1; i++) if (g[i] !== 'O' && g[i] !== 'M') return false;
+    return true;
+  }).length;
+  res.guest = guestsOf(a).filter(function (h) { return covers(gridOf(h.id, date, a), 'O'); }).length;
+  res.s = m2t(DAY_S + a0 * STEP);
+  res.e = m2t(DAY_S + a1 * STEP);
+  return res;
+}
+
+function daySummary(date) { return summarize(date, null); }
+
+function fillFor(sum) {
+  if (sum.count >= sum.total && sum.total > 0) return ['var(--ok-full)', '#ffffff'];
+  if (sum.count >= sum.min) return ['var(--ok-mid)', '#1f5a45'];
+  if (sum.count >= 2) return ['var(--ok-bg)', 'var(--ok)'];
+  return ['', 'var(--muted)'];
+}
+
+/* ---------- アドバイザー ---------- */
+
+function fmtDate(date) {
+  var d = new Date(date + 'T00:00:00');
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）';
+}
+
+/**
+ * 月内の全日 × 全アクティビティを裏で計算して、声かけ文を作る。
+ * 画面には操作を出さず、ここで判断した結果だけを見せる。
+ */
+function fmtShort(date) {
+  var d = new Date(date + 'T00:00:00');
+  return (d.getMonth() + 1) + '/' + d.getDate() + '（' + DOW[d.getDay()] + '）';
+}
+
+/**
+ * 表示中の月と翌月を裏で全部計算して、アドバイス文にまとめる。
+ * メッセージが増えすぎないよう、次の4種類までに集約する。
+ *   1. いちばん近い候補日（詳しく）
+ *   2. ほかの候補日（1行にまとめる）
+ *   3. 季節のおすすめ
+ *   4. お知らせ（あと1家族・未回答をまとめる）
+ */
+function buildAdvice() {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var byDate = {}, order = [], near = [], mine = 0;
+
+  (S.months || [S.ym]).forEach(function (ym) {
+    var p = parseYm(ym), n = daysIn(ym);
+    for (var d = 1; d <= n; d++) {
+      var date = dateStr(p.y, p.m, d);
+      if (new Date(date + 'T00:00:00') < today) continue;
+      if (ym === S.ym && !gridOf(S.me.id, date)) mine++;
+
+      var best = null, nr = null;
+      activitiesOn(date).forEach(function (a) {
+        var r = summarize(date, a);
+        if (r.count >= r.min) {
+          var better = !best ||
+            (r.count >= r.total ? 1 : 0) > (best.count >= best.total ? 1 : 0) ||
+            r.count > best.count;
+          if (better) best = r;
+        } else if (r.count >= 1 && r.count === r.min - 1) {
+          if (!nr || r.count > nr.count) nr = r;
+        }
+      });
+      if (best) { byDate[date] = best; order.push(date); }
+      else if (nr) near.push({ date: date, r: nr });
+    }
+  });
+
+  var out = [];
+
+  if (order.length) {
+    var d0 = order[0], r0 = byDate[d0];
+    out.push({
+      date: d0,
+      text: '<b>' + fmtDate(d0) + ' ' + r0.s + '〜' + r0.e + '</b> は' +
+        r0.count + '家族そろいます' + (r0.count >= r0.total ? '（全員）' : '') + '。' +
+        r0.act.name + 'が楽しそうですね♪' +
+        (r0.guest ? ' ゲスト家も参加できます。' : '') +
+        (r0.maybe ? ' あと' + r0.maybe + '家族が△です。' : '')
+    });
+
+    // 2件目以降はまとめて1行にする。同じ文が並ぶと読み飛ばされるため
+    var rest = order.slice(1, 4).map(function (dt) {
+      return fmtShort(dt) + ' ' + byDate[dt].act.name;
+    });
+    if (rest.length) {
+      out.push({
+        date: order[1],
+        text: 'ほかに <b>' + rest.join('</b>、<b>') + '</b> も候補です。' +
+          (order.length > 4 ? 'まだ他にもあります。' : '')
+      });
+    }
+  } else {
+    out.push({
+      flat: true,
+      text: 'いまのところ揃う日がありません。まずは「じぶんの予定」で遊べる時間を入れてみてください。'
+    });
+  }
+
+  // 季節のおすすめ。候補日があればその月、なければ表示中の月で出す
+  var sm = Number((order.length ? order[0] : S.ym + '-01').slice(5, 7));
+  var items = SEASON[sm] || [];
+  if (items.length) {
+    out.push({
+      flat: true,
+      text: sm + '月は ' + items.join('・') + ' の季節です。お出かけの相談にもどうぞ。'
+    });
+  }
+
+  // お知らせは1行にまとめる。候補が十分あるときは「あと1家族」の話は出さない
+  var notes = [];
+  if (near.length && order.length < 3) {
+    notes.push('あと1家族で成立する日が' + near.length + '日あります（' +
+      near.slice(0, 2).map(function (x) { return fmtShort(x.date) + ' ' + x.r.act.name; }).join('、') + 'など）。');
+  }
+  // 候補がまだ無いときは1件目の文で足りているので、未回答の話は重ねない
+  if (mine && order.length) notes.push('今月まだ登録していない日が' + mine + '日あります。');
+  if (notes.length) out.push({ flat: true, text: notes.join(' ') });
+
+  return out;
+}
+
+/* ---------- 一覧の描画 ---------- */
+
+function monthBar() {
+  var p = parseYm(S.ym);
+  return '<div class="monthbar"><button data-nav="-1">‹</button>' +
+    '<span>' + p.y + '年' + p.m + '月</span><button data-nav="1">›</button></div>';
+}
+function dowRow() {
+  return '<div class="dow">' + DOW.map(function (d) { return '<div>' + d + '</div>'; }).join('') + '</div>';
+}
+
+function renderAgg() {
+  var advice = '<div class="card"><div class="advice">' + buildAdvice().map(function (a) {
+    return '<div class="ad' + (a.flat ? ' flat' : '') + '"' + (a.date ? ' data-date="' + a.date + '"' : '') +
+      '><span class="dot"></span><span>' + a.text + '</span></div>';
+  }).join('') + '</div></div>';
+
+  var cells = '';
+  var fd = firstDow(S.ym), n = daysIn(S.ym), p = parseYm(S.ym);
+  for (var i = 0; i < fd; i++) cells += '<div class="cell empty"></div>';
+  for (var d = 1; d <= n; d++) {
+    var date = dateStr(p.y, p.m, d);
+    var sum = daySummary(date);
+    var f = fillFor(sum);
+    var show = sum.count >= 2;
+    cells += '<div class="cell' + (f[0] ? '' : ' plain') + '" data-date="' + date + '"' +
+      ' style="' + (f[0] ? 'background:' + f[0] + ';' : '') + 'color:' + f[1] + '">' +
+      '<span>' + d + '</span>' +
+      (show ? '<span class="n">' + sum.count + (sum.guest ? '+' : '') + '</span><span class="t">' + sum.s + '〜</span>' : '') +
+      '</div>';
+  }
+
+  return advice + '<div class="card">' + monthBar() + dowRow() +
+    '<div class="grid">' + cells + '</div></div>';
+}
+
+function renderMine() {
+  var cells = '';
+  var fd = firstDow(S.ym), n = daysIn(S.ym), p = parseYm(S.ym);
+  for (var i = 0; i < fd; i++) cells += '<div class="cell empty"></div>';
+  for (var d = 1; d <= n; d++) {
+    var date = dateStr(p.y, p.m, d);
+    var eff = effective(S.me.id, date);
+    var g = gridOf(S.me.id, date);
+    var bars = '';
+    if (g) {
+      var run = null;
+      for (var i = 0; i <= NCELL; i++) {
+        var st = i < NCELL ? g[i] : '';
+        if (run && st !== run.st) {
+          bars += '<i style="left:' + (run.a / NCELL * 100) + '%;width:' + ((i - run.a) / NCELL * 100) + '%;background:' +
+            (run.st === 'O' ? 'var(--ok-full)' : run.st === 'M' ? 'var(--maybe-dot)' : 'var(--no-dot)') + '"></i>';
+          run = null;
+        }
+        if (st && !run) run = { st: st, a: i };
+      }
+    }
+    cells += '<div class="cell plain" data-date="' + date + '" style="' + (eff.over ? '' : 'opacity:.72') + '">' +
+      '<span>' + d + '</span><span class="mini">' + bars + '</span></div>';
+  }
+  return '<div class="card">' + monthBar() + dowRow() + '<div class="grid">' + cells + '</div>' +
+    '<p class="note">バーが薄い日は平常パターンのまま、濃い日はその日だけ登録した時間帯です。日付を押すと編集できます。</p></div>';
+}
+
+function renderWeekly() {
+  var rows = '';
+  for (var wd = 0; wd < 7; wd++) {
+    var list = (S.weekly[S.me.id] && S.weekly[S.me.id][String(wd)]) || [];
+    var rs = list.length
+      ? list.map(function (r) {
+          return '<span' + (r.st === 'M' ? ' class="m"' : '') + '>' + r.s + '〜' + r.e + '</span>';
+        }).join('')
+      : '<span class="none">登録なし</span>';
+    rows += '<div class="wrow" data-wd="' + wd + '"><span class="d">' + DOW[wd] + '</span>' +
+      '<span class="rs">' + rs + '</span><span class="go">›</span></div>';
+  }
+  return '<div class="card"><h2 style="font-size:17px;margin:0 0 2px">いつも遊べる日</h2>' +
+    '<p class="sub">いつもの週で遊べる時間帯を登録しておきます。特定の日だけ違うときは「じぶんの予定」で上書きします。</p>' +
+    rows + '</div>';
+}
+
+/* ---------- ポップアップ ---------- */
+
+function openSheet(state) {
+  M = state;
+  document.getElementById('ov').hidden = false;
+  drawSheet();
+}
+function closeSheet() {
+  M = null;
+  document.getElementById('ov').hidden = true;
+}
+
+function drawSheet() {
+  document.getElementById('sheet').innerHTML =
+    M.kind === 'who' ? sheetWho() : M.kind === 'detail' ? sheetDetail() : sheetEdit();
+}
+
+/** 左上のアイコンから開く、家族の選択 */
+function sheetWho() {
+  return sheetHeader('どの家族ですか？') +
+    '<p class="sub">選ぶとその家族として登録できます。あとから切り替えられます。</p>' +
+    '<div class="whos">' + S.households.map(function (h) {
+      return '<button class="who' + (S.me && S.me.id === h.id ? ' on' : '') + '" data-me="' + h.id + '">' +
+        '<span class="cl" style="background:' + h.color + '">' + h.name.charAt(0) + '</span>' +
+        '<span>' + h.name + (h.guest ? '<span class="tagline">代行</span>' : '') + '</span></button>';
+    }).join('') + '</div>';
+}
+
+function sheetHeader(title) {
+  return '<header><h2>' + title + '</h2><button class="close" data-close="1">✕</button></header>';
+}
+
+function timeline(rows, w, band) {
+  var span = w[1] - w[0];
+  function bars(ranges) {
+    if (!ranges) return '<span class="none">未回答</span>';
+    return ranges.map(function (r) {
+      var a = Math.max(w[0], t2m(r.s)), b = Math.min(w[1], t2m(r.e));
+      if (b <= a) return '';
+      var c = r.st === 'O' ? 'var(--ok-full)' : r.st === 'M' ? 'var(--maybe-dot)' : 'var(--no-dot)';
+      return '<i style="left:' + ((a - w[0]) / span * 100) + '%;width:' + ((b - a) / span * 100) +
+        '%;background:' + c + '"></i>';
+    }).join('');
+  }
+  var html = '<div class="tlwrap"><div class="tlrows">';
+  if (band) {
+    html += '<div class="bandwrap"><div></div><div class="bt"><div class="band" style="left:' +
+      ((t2m(band[0]) - w[0]) / span * 100) + '%;width:' + ((t2m(band[1]) - t2m(band[0])) / span * 100) + '%"></div></div></div>';
+  }
+  html += rows.map(function (r) {
+    return '<div class="tlrow"><span class="nm"' + (r.guest ? ' style="color:var(--muted)"' : '') + '>' +
+      r.name + '</span><span class="track">' + bars(r.ranges) + '</span></div>';
+  }).join('');
+  html += '</div><div class="tlaxis"><span></span><span class="ax"><span>' + m2t(w[0]) + '</span><span>' +
+    m2t(Math.round((w[0] + w[1]) / 2 / STEP) * STEP) + '</span><span>' + m2t(w[1]) + '</span></span></div>';
+  return html + '</div>';
+}
+
+function sheetDetail() {
+  var date = M.date;
+  var d = new Date(date + 'T00:00:00');
+  var sum = daySummary(date);
+  var all = membersOf(null).concat(guestsOf(null));
+
+  var rows = all.map(function (h) {
+    var eff = effective(h.id, date);
+    return { name: h.name, ranges: eff.ranges, guest: h.guest };
+  });
+
+  var verdict = sum.count >= sum.min
+    ? '<b>' + sum.s + '〜' + sum.e + '</b> なら ' + sum.count + '家族' +
+      (sum.guest ? '＋ゲスト' + sum.guest : '') + (sum.maybe ? '（△が' + sum.maybe + '家族）' : '')
+    : (sum.count >= 2 ? sum.s + '〜' + sum.e + ' で ' + sum.count + '家族どまり' : '揃う時間帯がまだありません') +
+      (sum.un ? '（未回答' + sum.un + '家族）' : '');
+
+  var acts = activitiesOn(date).map(function (a) {
+    var r = summarize(date, a);
+    return '<div class="arow"><span class="an">' + a.name + '</span>' +
+      (r.count >= r.min
+        ? '<span class="ay">' + r.s + '〜' + r.e + '　' + r.count + '家族' + (r.guest ? '＋ゲスト' : '') + '</span>'
+        : '<span class="ann">' + (r.count >= 1 ? r.count + '家族どまり' : 'まだ揃いません') + '</span>') +
+      '</div>';
+  }).join('');
+
+  var memos = [];
+  all.forEach(function (h) {
+    var eff = effective(h.id, date);
+    if (!eff.ranges) return;
+    eff.ranges.forEach(function (r) { if (r.m) memos.push(h.name + '「' + r.m + '」'); });
+  });
+
+  return sheetHeader((d.getMonth() + 1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）') +
+    '<p class="sub">' + verdict + '</p>' +
+    timeline(rows, [DAY_S, DAY_E], sum.count >= 2 ? [sum.s, sum.e] : null) +
+    (memos.length ? '<p class="note">' + memos.join(' / ') + '</p>' : '') +
+    acts;
+}
+
+function timeOptions(sel, from, to) {
+  var o = '';
+  for (var m = from; m <= to; m += STEP) {
+    o += '<option value="' + m2t(m) + '"' + (m2t(m) === sel ? ' selected' : '') + '>' + m2t(m) + '</option>';
+  }
+  return o;
+}
+
+function sheetEdit() {
+  var isDay = M.kind === 'day';
+  var title = isDay
+    ? (function () { var d = new Date(M.date + 'T00:00:00'); return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）'; })()
+    : '毎週' + DOW[M.wd] + '曜日';
+
+  var list = M.draft.length
+    ? '<div class="rlist">' + M.draft.map(function (r, i) {
+        var tags = (r.acts && r.acts.length) ? r.acts.map(actName).join('・') : '';
+        return '<div class="ritem st-' + r.st + '"><span class="mk">' + MARK[r.st] + '</span>' +
+          '<span>' + (r.st === 'X' ? '終日 行けない' : r.s + ' 〜 ' + r.e) +
+          (tags ? '<span class="tg">（' + tags + '）</span>' : '') + '</span>' +
+          '<button class="rm" data-del="' + i + '">✕</button></div>';
+      }).join('') + '</div>'
+    : '<p class="empty-note">まだ登録がありません</p>';
+
+  // よく使う枠。時刻も書いておけば説明がいらない
+  var presets = '<div class="presets big">' + PRESETS.map(function (p, i) {
+    return '<button data-pre="' + i + '">' + p[0] + '<span>' + p[1] + '〜' + p[2] + '</span></button>';
+  }).join('') + (isDay ? '<button class="ng" data-x="1">行けない<span>終日</span></button>' : '') + '</div>';
+
+  // 細かい指定は畳んでおく。ふだんは上のボタンだけで足りる
+  var more = '<button class="more" data-more="1">' + (M.open ? '▾' : '▸') + ' くわしく決める</button>';
+  if (M.open) {
+    more += '<div class="morebox">' +
+      '<div class="addrow">' +
+      '<select data-f="s">' + timeOptions(M.ns, DAY_S, DAY_E - STEP) + '</select>' +
+      '<select data-f="e">' + timeOptions(M.ne, DAY_S + STEP, DAY_E) + '</select>' +
+      '<button class="stbtn on-' + M.nst + '" data-tog="1" title="◯ 行ける / △ たぶん">' + MARK[M.nst] + '</button>' +
+      '<button class="add" data-add="1">追加</button></div>' +
+      '<p class="cap">この時間にできること</p><div class="actsel">' +
+      '<button data-sel="ALL"' + (M.nacts.length ? '' : ' class="on"') + '>すべて</button>' +
+      S.activities.map(function (a) {
+        return '<button data-sel="' + a.id + '"' + (M.nacts.indexOf(a.id) >= 0 ? ' class="on"' : '') + '>' + a.name + '</button>';
+      }).join('') +
+      '</div></div>';
+  }
+
+  var memo = isDay
+    ? '<input type="text" id="memo" placeholder="「15時以降なら」などのひとこと" value="' + esc(M.memo || '') + '">'
+    : '';
+
+  var back = isDay && S.overrides[M.date] && S.overrides[M.date][S.me.id]
+    ? '<button class="link" data-reset="1">いつも遊べる日に戻す</button>' : '';
+
+  return sheetHeader(title) +
+    '<p class="sub">押すだけで保存されます</p>' +
+    list + presets + more + memo + back;
+}
+
+/* ---------- 描画とイベント ---------- */
+
+function render() {
+  if (!S.me) return; // 家族を選ぶまでは描画しない
+  document.getElementById('nav').hidden = false;
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) {
+    b.classList.toggle('on', b.dataset.v === S.view);
+  });
+  document.getElementById('app').innerHTML =
+    S.view === 'agg' ? renderAgg() : S.view === 'mine' ? renderMine() : renderWeekly();
+}
+
+/** 表示中の月と翌月を読み込む。アドバイザーが月をまたいで先読みできるようにするため。 */
+function loadMonths(ym) {
+  var next = shiftYm(ym, 1);
+  return Promise.all([
+    api('api_getMonth', [ym]),
+    api('api_getMonth', [next])
+  ]).then(function (rs) {
+    var out = {};
+    rs.forEach(function (r) {
+      Object.keys(r.overrides || {}).forEach(function (d) { out[d] = r.overrides[d]; });
+    });
+    S.overrides = out;
+    S.weekly = rs[0].weekly || {};
+    S.months = [ym, next];
+  });
+}
+
+function openDayEditor(date) {
+  var eff = effective(S.me.id, date);
+  var memo = '';
+  (eff.ranges || []).forEach(function (r) { if (r.m && !memo) memo = r.m; });
+  openSheet({
+    kind: 'day', date: date, memo: memo,
+    draft: (eff.ranges || []).map(function (r) { return { s: r.s, e: r.e, st: r.st, acts: (r.acts || []).slice() }; }),
+    ns: '09:00', ne: '12:00', nst: 'O', nacts: [], open: false
+  });
+}
+
+function openWeekdayEditor(wd) {
+  var list = (S.weekly[S.me.id] && S.weekly[S.me.id][String(wd)]) || [];
+  openSheet({
+    kind: 'weekday', wd: wd,
+    draft: list.map(function (r) { return { s: r.s, e: r.e, st: r.st, acts: (r.acts || []).slice() }; }),
+    ns: '09:00', ne: '12:00', nst: 'O', nacts: [], open: false
+  });
+}
+
+document.getElementById('nav').addEventListener('click', function (e) {
+  var b = e.target.closest('button');
+  if (!b) return;
+  S.view = b.dataset.v;
+  render();
+});
+
+document.getElementById('app').addEventListener('click', function (e) {
+  var t = e.target.closest('[data-nav],[data-date],[data-wd]');
+  if (!t) return;
+  if (t.dataset.nav) {
+    S.ym = shiftYm(S.ym, Number(t.dataset.nav));
+    loadMonths(S.ym).then(render);
+  } else if (t.dataset.date) {
+    var date = t.dataset.date;
+    if (S.view !== 'agg') return openDayEditor(date);
+    // アドバイスから翌月の日を開いたときは、カレンダーもその月に合わせる
+    if (date.slice(0, 7) !== S.ym) {
+      S.ym = date.slice(0, 7);
+      render();
+      loadMonths(S.ym).then(render);
+    }
+    openSheet({ kind: 'detail', date: date });
+  } else if (t.dataset.wd) {
+    openWeekdayEditor(Number(t.dataset.wd));
+  }
+});
+
+document.getElementById('ov').addEventListener('click', function (e) {
+  if (e.target.id === 'ov') return closeSheet();
+  var t = e.target.closest('[data-close],[data-me],[data-del],[data-pre],[data-x],[data-sel],[data-tog],[data-add],[data-more],[data-reset]');
+  if (!t) return;
+
+  // 再描画でメモが消えないよう、先に控えておく
+  var memoEl = document.getElementById('memo');
+  if (memoEl && M) M.memo = memoEl.value;
+
+  if (t.dataset.close) return closeSheet();
+  if (t.dataset.me) return selectMe(t.dataset.me);
+  if (t.dataset.more) { M.open = !M.open; return drawSheet(); }
+  if (t.dataset.sel) {
+    var id = t.dataset.sel;
+    if (id === 'ALL') M.nacts = [];
+    else {
+      var i = M.nacts.indexOf(id);
+      if (i >= 0) M.nacts.splice(i, 1); else M.nacts.push(id);
+    }
+    return drawSheet();
+  }
+  if (t.dataset.tog) { M.nst = M.nst === 'O' ? 'M' : 'O'; return drawSheet(); }
+
+  if (t.dataset.del) M.draft.splice(Number(t.dataset.del), 1);
+  else if (t.dataset.pre) {
+    var p = PRESETS[Number(t.dataset.pre)];
+    M.draft = applyRange(M.draft, { s: p[1], e: p[2], st: M.nst, acts: M.nacts.slice() });
+  } else if (t.dataset.x) {
+    M.draft = [{ s: m2t(DAY_S), e: m2t(DAY_E), st: 'X', acts: [] }];
+  } else if (t.dataset.add) {
+    var sheet = document.getElementById('sheet');
+    var s1 = sheet.querySelector('[data-f="s"]').value, e1 = sheet.querySelector('[data-f="e"]').value;
+    if (t2m(s1) >= t2m(e1)) return alert('終了時刻は開始時刻より後にしてください。');
+    M.ns = s1; M.ne = e1;
+    M.draft = applyRange(M.draft, { s: s1, e: e1, st: M.nst, acts: M.nacts.slice() });
+  } else if (t.dataset.reset) {
+    M.draft = [];
+    M.memo = '';
+  }
+  drawSheet();
+  persistDraft();
+});
+
+// ひとことは入力を終えた時点で保存する
+document.getElementById('ov').addEventListener('change', function (e) {
+  if (e.target.id !== 'memo' || !M) return;
+  M.memo = e.target.value;
+  persistDraft();
+});
+
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && M) closeSheet(); });
+
+/** いま編集中の内容をそのまま保存する。押すたびに自動で走るので保存ボタンは無い。 */
+function persistDraft() {
+  if (M.kind === 'day') {
+    var date = M.date;
+    var payload = M.draft.map(function (r, i) {
+      return { s: r.s, e: r.e, st: r.st, acts: r.acts || [], m: i === 0 ? (M.memo || '') : '' };
+    });
+    if (payload.length) {
+      if (!S.overrides[date]) S.overrides[date] = {};
+      S.overrides[date][S.me.id] = payload;
+    } else if (S.overrides[date]) {
+      delete S.overrides[date][S.me.id];
+    }
+    render();
+    return api('api_setDay', [S.me.id, date, payload])
+      .then(function () { toast('保存しました'); })
+      .catch(function (err) {
+        alert('保存できませんでした: ' + (err.message || err));
+        loadMonths(S.ym).then(render);
+      });
+  }
+
+  var grid = {};
+  for (var i = 0; i < 7; i++) {
+    grid[i] = i === M.wd ? M.draft : ((S.weekly[S.me.id] && S.weekly[S.me.id][String(i)]) || []);
+  }
+  return api('api_setWeekly', [S.me.id, grid]).then(function (r) {
+    S.weekly = r.weekly;
+    render();
+    toast('保存しました');
+  }).catch(function (err) {
+    alert('保存できませんでした: ' + (err.message || err));
+  });
+}
+
+/* ---------- 家族の選択 ---------- */
+
+var DEFAULT_ME = 'h1'; // 初回に開いたときの家族。左上のアイコンで切り替えられる
+
+function savedMeId() {
+  if (PRE_ID) return PRE_ID;
+  try { return localStorage.getItem(ME_KEY) || DEFAULT_ME; } catch (e) { return DEFAULT_ME; }
+}
+
+function selectMe(id) {
+  var h = S.households.filter(function (x) { return x.id === id; })[0];
+  if (!h) return;
+  S.me = h;
+  try { localStorage.setItem(ME_KEY, id); } catch (e) { /* 使えない環境では今回だけ有効 */ }
+  document.getElementById('me').textContent = h.name;
+  var badge = document.getElementById('badge');
+  badge.textContent = h.name.charAt(0);
+  badge.style.background = h.color;
+  closeSheet();
+  render();
+}
+
+document.getElementById('badge').addEventListener('click', function () {
+  openSheet({ kind: 'who' });
+});
+
+/* ---------- 他の家族の変更を取り込む ---------- */
+
+function refresh() {
+  if (!S.me || M) return Promise.resolve();
+  return loadMonths(S.ym).then(render).catch(function () { /* 通信が切れていても黙って次回に任せる */ });
+}
+setInterval(refresh, 60000);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+
+/* ---------- 起動 ---------- */
+
+api('api_bootstrap', []).then(function (b) {
+  S.households = b.households;
+  S.activities = b.activities;
+  S.ym = ymOf(new Date());
+  return loadMonths(S.ym);
+}).then(function () {
+  var id = savedMeId();
+  var h = S.households.filter(function (x) { return x.id === id; })[0];
+  if (h) return selectMe(h.id);
+  // まだ誰も選んでいないときは、最初に家族を選んでもらう
+  document.getElementById('nav').hidden = false;
+  document.getElementById('app').innerHTML =
+    '<div class="card"><p class="sub" style="margin:0">左上のアイコンから、あなたの家族を選んでください。</p></div>';
+  openSheet({ kind: 'who' });
+}).catch(function (err) {
+  document.getElementById('app').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
+});
+</script>
+</body>
+</html>
