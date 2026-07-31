@@ -316,19 +316,28 @@
 </style>
 <script>
 var GAS_API = "https://script.google.com/macros/s/AKfycbxfZL7yaQu02xWYvyH0aaxl3LpLE80qiyS5jlaXu6RdpjNqYlWNbTGhsNEZCbRFFQY/exec";
+// GASは休んでいると初回の応答に失敗することがあるので、少し待って2回まで自動で試し直す
+function gasCall(fn, args, tries) {
+  return fetch(GAS_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn: fn, args: args })
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j.error) throw new Error(j.error);
+    return j.result;
+  }).catch(function (err) {
+    if (tries > 0 && String(err.message || err).indexOf('fetch') >= 0) {
+      return new Promise(function (res) { setTimeout(res, 1200); }).then(function () {
+        return gasCall(fn, args, tries - 1);
+      });
+    }
+    throw err;
+  });
+}
+
 window.__MOCK_API__ = new Proxy({}, {
   get: function (_, fn) {
-    return function () {
-      var args = Array.prototype.slice.call(arguments);
-      return fetch(GAS_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ fn: fn, args: args })
-      }).then(function (r) { return r.json(); }).then(function (j) {
-        if (j.error) throw new Error(j.error);
-        return j.result;
-      });
-    };
+    return function () { return gasCall(fn, Array.prototype.slice.call(arguments), 2); };
   }
 });
 </script>
