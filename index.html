@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
 <style>
   :root {
@@ -36,7 +37,7 @@
     font-size: 16px; line-height: 1.65;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 500px; margin: 0 auto; padding: 0 14px 48px; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 0 12px 48px; }
   header { display: flex; align-items: center; gap: 10px; padding: 20px 4px 14px; }
   header .title { flex: 1; display: flex; align-items: baseline; gap: 8px; }
   header h1 { font-size: 21px; font-weight: 600; margin: 0; letter-spacing: .02em; }
@@ -122,8 +123,8 @@
   }
   .ov[hidden] { display: none; }
   .sheet {
-    background: var(--card); width: 100%; max-width: 540px; border-radius: 26px 26px 0 0;
-    padding: 18px 18px 26px; max-height: 90vh; overflow-y: auto;
+    background: var(--card); width: 100%; max-width: 560px; border-radius: 26px 26px 0 0;
+    padding: 18px 16px calc(26px + env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto;
   }
   .sheet header { padding: 0 0 10px; }
   .sheet h2 { font-size: 19px; font-weight: 600; margin: 0; flex: 1; }
@@ -913,6 +914,13 @@ function sheetEdit() {
       }).join('') + '</div>'
     : '<p class="empty-note">まだ登録がありません</p>';
 
+  // 何をする時間なのかを先に選ばせる。既定は「すべて」
+  var sel = '<p class="cap">何のための時間？</p><div class="actsel">' +
+    '<button data-sel="ALL"' + (M.nacts.length ? '' : ' class="on"') + '>すべて</button>' +
+    S.activities.map(function (a) {
+      return '<button data-sel="' + a.id + '"' + (M.nacts.indexOf(a.id) >= 0 ? ' class="on"' : '') + '>' + a.name + '</button>';
+    }).join('') + '</div>';
+
   // よく使う枠。時刻も書いておけば説明がいらない
   var presets = '<div class="presets big">' + PRESETS.map(function (p, i) {
     return '<button data-pre="' + i + '">' + p[0] + '<span>' + p[1] + '〜' + p[2] + '</span></button>';
@@ -927,7 +935,7 @@ function sheetEdit() {
       '<select data-f="e">' + timeOptions(M.ne, DAY_S + STEP, DAY_E) + '</select>' +
       '<button class="stbtn on-' + M.nst + '" data-tog="1" title="◯ 行ける / △ たぶん">' + MARK[M.nst] + '</button>' +
       '<button class="add" data-add="1">追加</button></div>' +
-      '<p class="cap">この時間にできること</p><div class="actsel">' +
+      '<p class="cap">何のための時間？（上と同じ）</p><div class="actsel">' +
       '<button data-sel="ALL"' + (M.nacts.length ? '' : ' class="on"') + '>すべて</button>' +
       S.activities.map(function (a) {
         return '<button data-sel="' + a.id + '"' + (M.nacts.indexOf(a.id) >= 0 ? ' class="on"' : '') + '>' + a.name + '</button>';
@@ -944,7 +952,7 @@ function sheetEdit() {
 
   return sheetHeader(title) +
     '<p class="sub">押すだけで保存されます</p>' +
-    list + presets + more + memo + back;
+    list + sel + presets + more + memo + back;
 }
 
 /* ---------- 描画とイベント ---------- */
@@ -959,21 +967,39 @@ function render() {
     S.view === 'agg' ? renderAgg() : S.view === 'mine' ? renderMine() : renderWeekly();
 }
 
-/** 表示中の月と翌月を読み込む。アドバイザーが月をまたいで先読みできるようにするため。 */
+/** 表示中の月と翌月をまとめて読み込む（1往復）。 */
 function loadMonths(ym) {
-  var next = shiftYm(ym, 1);
-  return Promise.all([
-    api('api_getMonth', [ym]),
-    api('api_getMonth', [next])
-  ]).then(function (rs) {
-    var out = {};
-    rs.forEach(function (r) {
-      Object.keys(r.overrides || {}).forEach(function (d) { out[d] = r.overrides[d]; });
-    });
-    S.overrides = out;
-    S.weekly = rs[0].weekly || {};
-    S.months = [ym, next];
+  return api('api_boot', [ym]).then(function (b) {
+    S.households = b.households;
+    S.activities = b.activities;
+    S.weekly = b.weekly || {};
+    S.overrides = b.overrides || {};
+    S.months = b.months;
+    saveCache(b);
   });
+}
+
+/* ---------- 前回の内容をとっておいて、開いた瞬間に出す ---------- */
+
+var CACHE_KEY = 'fins-cache';
+
+function saveCache(b) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ym: b.months[0], data: b })); } catch (e) { /* 使えなければ諦める */ }
+}
+
+function loadCache(ym) {
+  try {
+    var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    return (c && c.ym === ym) ? c.data : null;
+  } catch (e) { return null; }
+}
+
+function applyBoot(b) {
+  S.households = b.households;
+  S.activities = b.activities;
+  S.weekly = b.weekly || {};
+  S.overrides = b.overrides || {};
+  S.months = b.months;
 }
 
 function openDayEditor(date) {
@@ -1148,21 +1174,33 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 
 /* ---------- 起動 ---------- */
 
-api('api_bootstrap', []).then(function (b) {
-  S.households = b.households;
-  S.activities = b.activities;
-  S.ym = ymOf(new Date());
-  return loadMonths(S.ym);
-}).then(function () {
+function bootWith(b) {
+  applyBoot(b);
   var id = savedMeId();
   var h = S.households.filter(function (x) { return x.id === id; })[0];
   if (h) return selectMe(h.id);
-  // まだ誰も選んでいないときは、最初に家族を選んでもらう
   document.getElementById('nav').hidden = false;
   document.getElementById('app').innerHTML =
     '<div class="card"><p class="sub" style="margin:0">左上のアイコンから、あなたの家族を選んでください。</p></div>';
   openSheet({ kind: 'who' });
+}
+
+S.ym = ymOf(new Date());
+
+// 前回の内容があれば先に描いてしまう。通信を待たずに触れるようにするため
+var cached = loadCache(S.ym);
+if (cached) {
+  bootWith(cached);
+} else {
+  document.getElementById('app').innerHTML = '<div class="card"><p class="sub" style="margin:0">読み込んでいます…</p></div>';
+}
+
+// そのうえで最新を取りに行き、届いたら差し替える
+api('api_boot', [S.ym]).then(function (b) {
+  saveCache(b);
+  if (cached) { applyBoot(b); render(); } else { bootWith(b); }
 }).catch(function (err) {
+  if (cached) return; // 古い内容が出ているので黙って諦める
   document.getElementById('app').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
 });
 </script>
