@@ -967,9 +967,33 @@ function render() {
     S.view === 'agg' ? renderAgg() : S.view === 'mine' ? renderMine() : renderWeekly();
 }
 
+/**
+ * 起動データを取る。まず1往復で済む api_boot を試し、
+ * サーバー側が古くて未対応なら以前の3往復の呼び方に落とす。
+ */
+function fetchBoot(ym) {
+  return api('api_boot', [ym]).catch(function (e) {
+    var next = shiftYm(ym, 1);
+    return Promise.all([
+      api('api_bootstrap', []),
+      api('api_getMonth', [ym]),
+      api('api_getMonth', [next])
+    ]).then(function (rs) {
+      var ov = {};
+      [rs[1], rs[2]].forEach(function (r) {
+        Object.keys(r.overrides || {}).forEach(function (d) { ov[d] = r.overrides[d]; });
+      });
+      return {
+        households: rs[0].households, activities: rs[0].activities,
+        weekly: rs[1].weekly || {}, overrides: ov, months: [ym, next]
+      };
+    });
+  });
+}
+
 /** 表示中の月と翌月をまとめて読み込む（1往復）。 */
 function loadMonths(ym) {
-  return api('api_boot', [ym]).then(function (b) {
+  return fetchBoot(ym).then(function (b) {
     S.households = b.households;
     S.activities = b.activities;
     S.weekly = b.weekly || {};
@@ -1196,7 +1220,7 @@ if (cached) {
 }
 
 // そのうえで最新を取りに行き、届いたら差し替える
-api('api_boot', [S.ym]).then(function (b) {
+fetchBoot(S.ym).then(function (b) {
   saveCache(b);
   if (cached) { applyBoot(b); render(); } else { bootWith(b); }
 }).catch(function (err) {
