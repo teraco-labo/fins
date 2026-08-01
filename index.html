@@ -992,9 +992,12 @@ function legacyBoot(ym) {
 }
 
 function fetchBoot(ym) {
-  // いまのサーバーに合わせて、確実に動く呼び方だけを使う。
-  // 1往復版（api_boot）はサーバー側の反映が済んでから戻す。
-  return legacyBoot(ym);
+  // 1往復で済む呼び方。サーバーが古い場合だけ以前の呼び方に落とす
+  if (knownNoBoot()) return legacyBoot(ym);
+  return api('api_boot', [ym]).catch(function () {
+    try { localStorage.setItem(NOBOOT_KEY, '1'); } catch (e) { /* 無視 */ }
+    return legacyBoot(ym);
+  });
 }
 
 /** 翌月ぶんを後から足す。アドバイスの先読みに使う。 */
@@ -1241,7 +1244,7 @@ if (cached) {
 fetchBoot(S.ym).then(function (b) {
   saveCache(b);
   if (cached) { applyBoot(b); render(); } else { bootWith(b); }
-  loadNextMonth();
+  if (!S.months || S.months.length < 2) loadNextMonth();
 }).catch(function (err) {
   if (cached) return; // 古い内容が出ているので黙って諦める
   document.getElementById('app').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
