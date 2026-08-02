@@ -1000,6 +1000,7 @@ function openSheet(state) {
 function closeSheet() {
   M = null;
   document.getElementById('ov').hidden = true;
+  flushSaves();   // 待たせている送信があれば、閉じた時点で片づける
 }
 
 function drawSheet() {
@@ -1285,6 +1286,7 @@ document.getElementById('nav').addEventListener('click', function (e) {
   if (!b) return;
   S.view = b.dataset.v;
   render();
+  refresh();   // タブを切り替えた時点で最新にする。読み込み直してもらわなくて済むように
 });
 
 document.getElementById('app').addEventListener('click', function (e) {
@@ -1360,7 +1362,13 @@ document.getElementById('ov').addEventListener('change', function (e) {
 
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && M) closeSheet(); });
 
-/** いま編集中の内容をそのまま保存する。押すたびに自動で走るので保存ボタンは無い。 */
+/**
+ * いま編集中の内容をそのまま保存する。押すたびに自動で走るので保存ボタンは無い。
+ *
+ * 画面には先に反映して、サーバーへの送信はまとめる。
+ * ボタンを続けて押すと1回ごとに送信することになり、
+ * 保存どうしが重なって取りこぼす原因になるため。
+ */
 function persistDraft() {
   if (M.kind === 'day') {
     var date = M.date;
@@ -1374,25 +1382,57 @@ function persistDraft() {
       delete S.overrides[date][S.me.id];
     }
     render();
-    return api('api_setDay', [S.me.id, date, payload])
-      .then(function () { rememberNow(); toast('保存しました'); })
-      .catch(function (err) {
-        alert('保存できませんでした: ' + (err.message || err));
-        loadMonths(S.ym).then(render);
-      });
+    rememberNow();          // 控えも先に更新する。開き直したときに古い内容が出ないように
+    queueSave('day', date, payload);
+    return Promise.resolve();
   }
 
   var grid = {};
   for (var i = 0; i < 7; i++) {
     grid[i] = i === M.wd ? M.draft : ((S.weekly[S.me.id] && S.weekly[S.me.id][String(i)]) || []);
   }
-  return api('api_setWeekly', [S.me.id, grid]).then(function (r) {
-    S.weekly = r.weekly;
-    render();
+  if (!S.weekly[S.me.id]) S.weekly[S.me.id] = {};
+  S.weekly[S.me.id][String(M.wd)] = M.draft.slice();
+  render();
+  rememberNow();
+  queueSave('weekly', String(M.wd), grid);
+  return Promise.resolve();
+}
+
+/* ---------- 保存の送信 ---------- */
+
+var pending = {};     // 送信待ち。同じ日を何度いじっても最後の1回だけ送る
+var saveTimer = null;
+var saving = 0;
+
+function queueSave(kind, key, payload) {
+  // 送るときではなく、入力した時点の家族で覚える。
+  // 送信を待っているあいだに左上で家族を切り替えられても、入れ違いにならないように
+  var hid = S.me.id;
+  pending[hid + '|' + kind + ':' + key] = { hid: hid, kind: kind, key: key, payload: payload };
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushSaves, 500);
+}
+
+function flushSaves() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  var jobs = Object.keys(pending).map(function (k) { return pending[k]; });
+  if (!jobs.length) return Promise.resolve();
+  pending = {};
+  saving++;
+  return Promise.all(jobs.map(function (j) {
+    return j.kind === 'day'
+      ? api('api_setDay', [j.hid, j.key, j.payload])
+      : api('api_setWeekly', [j.hid, j.payload]).then(function (r) { S.weekly = r.weekly; });
+  })).then(function () {
+    saving--;
     rememberNow();
     toast('保存しました');
+    return refresh(true);   // 保存できたら、ついでに他の家族の分も取り込む
   }).catch(function (err) {
+    saving--;
     alert('保存できませんでした: ' + (err.message || err));
+    return loadMonths(S.ym).then(render);
   });
 }
 
@@ -1424,12 +1464,27 @@ document.getElementById('badge').addEventListener('click', function () {
 
 /* ---------- 他の家族の変更を取り込む ---------- */
 
-function refresh() {
-  if (!S.me || M) return Promise.resolve();
-  return loadMonths(S.ym).then(render).catch(function () { /* 通信が切れていても黙って次回に任せる */ });
+/**
+ * 他の家族の登録を取り込む。
+ * 送信を待っている内容があるあいだは読み直さない。
+ * まだサーバーに届いていない自分の入力を、古い内容で上書きしてしまうため。
+ */
+function refresh(force) {
+  if (!S.me) return Promise.resolve();
+  if (saveTimer || saving) return Promise.resolve();
+  if (!force && M) return Promise.resolve();     // 編集中は画面を動かさない
+  return loadMonths(S.ym)               // 控えの更新は loadMonths がやってくれる
+    .then(function () { if (!M) render(); })
+    .catch(function () { /* 通信が切れていても黙って次回に任せる */ });
 }
-setInterval(refresh, 60000);
-document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+
+// 見ているあいだは短い間隔で。裏に回っているあいだは通信しない
+setInterval(function () { if (!document.hidden) refresh(); }, 15000);
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) flushSaves();            // 閉じられる前に送信を済ませる
+  else refresh();
+});
+window.addEventListener('pagehide', flushSaves);
 
 /* ---------- 起動 ---------- */
 
