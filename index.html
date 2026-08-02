@@ -152,8 +152,15 @@
   .bandwrap { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
   .bandwrap .bt { position: relative; }
   .band { position: absolute; top: 0; bottom: 0; border-radius: 8px; box-shadow: inset 0 0 0 2px var(--accent); }
-  .tlaxis { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .tlaxis .ax { display: flex; justify-content: space-between; }
+  /* 1時間ごとの目盛り。何時ごろの話なのかを帯だけで読み取れるようにする */
+  .track .tk { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); opacity: .55; border-radius: 0; }
+  .track .tk.mj { opacity: 1; }
+  .track i.bar { z-index: 1; }
+  .tlaxis { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .tlaxis .ax { position: relative; height: 13px; }
+  .tlaxis .ax span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+  .tlaxis .ax span:first-child { transform: none; }
+  .tlaxis .ax span:last-child { transform: translateX(-100%); }
 
   /* 時間帯の編集 */
   .rlist { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
@@ -262,6 +269,7 @@
     .dow, .grid { gap: 4px; }
     .cell { border-radius: 12px; }
     /* タブ名が折り返して高さがそろわなくなるのを防ぐ */
+    .tlaxis .ax span.h3 { display: none; }
     nav { gap: 2px; padding: 4px; }
     nav button { font-size: 13px; white-space: nowrap; padding: 10px 0; }
   }
@@ -380,27 +388,6 @@ window.__MOCK_API__ = new Proxy({}, {
 var PRE_ID = (new URLSearchParams(location.search)).get('h') || '';
 var ME_KEY = 'fins-me';
 
-/**
- * 月ごとのファミリー向け行事。アドバイスに季節感を足すためのもの。
- * 予定の判定には使わず、揃う日が見つかったときの「何をする？」の材料にする。
- * 増やしたいときはこの表に足すだけでよい。
- */
-var SEASON = {
-  1: ['初詣', '雪あそび', 'お正月あそび'],
-  2: ['豆まき', 'いちご狩り', '室内あそび'],
-  3: ['ひなまつり', 'お花見', '公園ピクニック'],
-  4: ['お花見', 'ピクニック', '潮干狩り'],
-  5: ['こどもの日', 'バーベキュー', 'いちご狩り'],
-  6: ['あじさい見物', '雨の日の室内あそび', 'ホタル観賞'],
-  7: ['夏祭り', '花火大会', 'プール', 'キャンプ'],
-  8: ['花火大会', '盆おどり', 'キャンプ', 'すいか割り'],
-  9: ['お月見', 'ぶどう狩り', '秋の公園あそび'],
-  10: ['紅葉狩り', 'ハロウィン', 'いも掘り'],
-  11: ['紅葉狩り', 'みかん狩り', '焼きいも'],
-  12: ['クリスマス会', 'もちつき', '年越しの集まり']
-};
-
-// 1日を30分刻みで扱う。06:00〜23:00 の範囲だけを対象にする。
 var DAY_S = 6 * 60, DAY_E = 23 * 60, STEP = 30;
 var NCELL = (DAY_E - DAY_S) / STEP;
 var MARK = { O: '◯', M: '△', X: '✕' };
@@ -498,7 +485,7 @@ function applyRange(list, nr) {
 
 /* ---------- 空き枠の解決 ---------- */
 
-/** その日の登録があればそれを、なければ平常パターンを返す。どちらもなければ null（未回答）。 */
+/** その日の登録があればそれを、なければ「いつも遊べる日」の設定を返す。どちらもなければ null（未回答）。 */
 function effective(hid, date) {
   var ov = S.overrides[date] && S.overrides[date][hid];
   if (ov) return { ranges: ov, over: true };
@@ -537,26 +524,6 @@ function actName(id) {
   return a ? a.name : id;
 }
 
-/**
- * その日、各家族が「この種目で」と名指しした数を数える。
- * 何をしたくて空けている日なのかを、案内の文面に反映するために使う。
- */
-function tagCounts(date) {
-  var out = {};
-  membersOf(null).forEach(function (h) {
-    var eff = effective(h.id, date);
-    if (!eff.ranges) return;
-    var seen = {};
-    eff.ranges.forEach(function (r) {
-      if (r.st !== 'O') return;
-      (r.acts || []).forEach(function (id) {
-        if (!seen[id]) { seen[id] = 1; out[id] = (out[id] || 0) + 1; }
-      });
-    });
-  });
-  return out;
-}
-
 /** その日にできるアクティビティ（季節で絞る）。川遊びは夏だけなど。 */
 function activitiesOn(date) {
   var m = Number(date.slice(5, 7));
@@ -573,7 +540,6 @@ function membersOf(a) { return S.households.filter(function (h) { return !h.gues
 function guestsOf(a) { return S.households.filter(function (h) { return h.guest && joins(h, a); }); }
 function windowOf(a) { return a ? [t2m(a.ws), t2m(a.we)] : [DAY_S, DAY_E]; }
 function needOf(a) { return Math.max(1, Math.ceil((a ? a.minMin : 60) / STEP)); }
-function minOf(a) { return a ? a.min : Math.max(2, membersOf(null).length - 1); }
 
 /** counts の中から、長さ need 以上で「最も少ない値」が最大になる区間を探す */
 function bestWindow(counts, need) {
@@ -607,7 +573,7 @@ function summarize(date, a) {
   }
   var bw = bestWindow(counts, needOf(a));
   var res = {
-    act: a, count: 0, guest: 0, maybe: 0, total: hs.length, min: minOf(a),
+    act: a, count: 0, guest: 0, maybe: 0, total: hs.length,
     un: grids.filter(function (g) { return !g; }).length
   };
 
@@ -664,272 +630,56 @@ function daySummary(date) { return summarize(date, null); }
  * 「登録が反映されていない」と見えてしまうため。
  */
 function fillFor(sum) {
-  if (sum.count >= sum.total && sum.total > 0) return ['var(--ok-full)', '#ffffff'];
-  if (sum.count >= sum.min) return ['var(--ok-mid)', '#1f5a45'];
+  // 重なっている家族の数がそのまま色の濃さになる。何家族で成立、という線は引かない
+  var n = sum.total || 4;
+  if (sum.count >= n) return ['var(--ok-full)', '#ffffff'];
+  if (sum.count >= n - 1) return ['var(--ok-mid)', '#1f5a45'];
   if (sum.count >= 2) return ['var(--ok-bg)', 'var(--ok)'];
   if (sum.count >= 1) return ['', 'var(--ok)'];
   return ['', 'var(--muted)'];
 }
 
-/* ---------- アドバイザー ---------- */
-
-function fmtDate(date) {
-  var d = new Date(date + 'T00:00:00');
-  return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）';
-}
-
 /**
- * 月内の全日 × 全アクティビティを裏で計算して、声かけ文を作る。
- * 画面には操作を出さず、ここで判断した結果だけを見せる。
+ * カードに出す「使い方の案内」。
+ *
+ * 状況へのコメントではなく、いま開いている画面で何ができるかを書く。
+ * 予定の中身は下のカレンダーを見れば分かるので、カードは操作の道案内にする。
  */
-function fmtShort(date) {
-  var d = new Date(date + 'T00:00:00');
-  return (d.getMonth() + 1) + '/' + d.getDate() + '（' + DOW[d.getDay()] + '）';
-}
-
-/**
- * 表示中の月と翌月を裏で全部計算して、アドバイス文にまとめる。
- * メッセージが増えすぎないよう、次の4種類までに集約する。
- *   1. いちばん近い候補日（詳しく）
- *   2. ほかの候補日（1行にまとめる）
- *   3. 季節のおすすめ
- *   4. お知らせ（あと1家族・未回答をまとめる）
- */
-/**
- * アナウンスの文面。状況ごとに複数の言い回しを持たせて、日によって変える。
- * 同じ文が出続けると読まれなくなるため。
- */
-function pick(arr, seed) { return arr[Math.abs(seed) % arr.length]; }
-
-/** その日ごとに変わる種。同じ日のうちは文面が固定される */
-function todaySeed() {
-  var d = new Date();
-  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
-}
-
-function daysFromToday(date) {
-  var t = new Date(); t.setHours(0, 0, 0, 0);
-  return Math.round((new Date(date + 'T00:00:00') - t) / 86400000);
-}
-
-function whenWord(date) {
-  var n = daysFromToday(date);
-  if (n === 0) return '今日';
-  if (n === 1) return '明日';
-  if (n === 2) return 'あさって';
-  return null;
-}
-
-/**
- * 月内と翌月を裏で全部計算して、状況に合う案内を作る。
- * 優先度の高いものから2枚、行動につながるものがあれば3枚まで出す。
- */
-function buildAdvice() {
-  var seed = todaySeed();
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  var byDate = {}, order = [], near = [], guestOnly = [], plain = [], mine = 0;
-
+function buildGuide() {
+  var mine = 0, days = 0;
   (S.months || [S.ym]).forEach(function (ym) {
-    var p = parseYm(ym), n = daysIn(ym);
+    var pm = parseYm(ym), n = daysIn(ym);
     for (var d = 1; d <= n; d++) {
-      var date = dateStr(p.y, p.m, d);
-      if (new Date(date + 'T00:00:00') < today) continue;
-      if (ym === S.ym && !gridOf(S.me.id, date)) mine++;
-
-      var best = null, nr = null, g = null;
-      activitiesOn(date).forEach(function (a) {
-        var r = summarize(date, a);
-        if (r.count >= r.min) {
-          var better = !best ||
-            (r.count >= r.total ? 1 : 0) > (best.count >= best.total ? 1 : 0) ||
-            r.count > best.count;
-          if (better) best = r;
-        } else if (r.count >= 1 && r.count === r.min - 1) {
-          if (!nr || r.count > nr.count) nr = r;
-        } else if (r.count === 0 && r.guest) {
-          if (!g) g = r;
-        }
-      });
-      if (best) { byDate[date] = best; order.push(date); }
-      else if (nr) near.push({ date: date, r: nr });
-      else if (g) guestOnly.push({ date: date, r: g });
-
-      // 種目を問わない重なり。カレンダーの数字はこれで出しているので、
-      // ここを見ないとカレンダーに「3」と出ている日をカードが一言も触れないことになる
-      var ds = daySummary(date);
-      if (ds.count >= 2) plain.push({ date: date, r: ds });
+      var date = dateStr(pm.y, pm.m, d);
+      if (ym !== S.ym) continue;
+      days++;
+      if (gridOf(S.me.id, date)) mine++;
     }
   });
+  var hasWeekly = !!(S.weekly[S.me.id] && Object.keys(S.weekly[S.me.id]).length);
 
-  var cands = [];
-  var full = order.filter(function (d) { return byDate[d].count >= byDate[d].total; });
-
-  // 1. 全員そろう日
-  if (full.length) {
-    var fd = full[0], fr = byDate[fd], w = whenWord(fd);
-    cands.push({ p: 1, date: fd, text: pick([
-      '<b>' + (w || fmtDate(fd)) + ' ' + fr.s + '〜' + fr.e + '</b> は4家族とも空いていそうです。' + fr.act.name + 'が楽しめそうですね♪',
-      '<b>' + fmtDate(fd) + ' ' + fr.s + '〜' + fr.e + '</b>、みんなの予定が重なっています。' + fr.act.name + 'にいい時間かもしれません♪',
-      '<b>' + fmtDate(fd) + '</b> の ' + fr.s + '〜' + fr.e + ' なら4家族そろいそうです。' + fr.act.name + 'はいかがでしょう♪'
-    ], seed) });
+  if (S.view === 'mine') {
+    var out = [{ text: '日付を押すと、その日に遊べる時間を登録できます。「午前」「午後」などのボタンを押すだけで入ります' }];
+    out.push(hasWeekly
+      ? { text: '薄い帯は「いつも遊べる日」から来ている時間です。その日だけ違うときは、日付を押して上書きします' }
+      : { text: '毎週だいたい同じ時間が空いているなら、「いつも遊べる日」に入れておくと毎回登録せずに済みます' });
+    if (mine) out.push({ text: '登録した時間を消すときは、日付を押して一覧の ✕ を押します。保存は自動なので、保存ボタンはありません' });
+    return out.slice(0, 3);
   }
 
-  // 2. すぐ先（3日以内）に成立する日
-  var soon = order.filter(function (d) { var n = daysFromToday(d); return n >= 0 && n <= 3; });
-  if (soon.length && soon[0] !== full[0]) {
-    var sd = soon[0], sr = byDate[sd], sw = whenWord(sd) || fmtShort(sd);
-    cands.push({ p: 2, date: sd, text: pick([
-      '<b>' + sw + ' ' + sr.s + '〜' + sr.e + '</b> は' + sr.count + '家族の予定が重なっています。' + sr.act.name + 'が楽しそうですね♪',
-      '<b>' + sw + ' ' + sr.s + '〜' + sr.e + '</b> なら' + sr.count + '家族そろいそうです',
-      '<b>' + sw + '</b>、' + sr.s + '〜' + sr.e + ' で' + sr.count + '家族。' + sr.act.name + 'によさそうですね♪'
-    ], seed) });
+  if (S.view === 'weekly') {
+    return [
+      { text: 'いつもの週で遊べる時間を、曜日ごとに入れておく画面です。ここに入れておくと、毎回カレンダーを埋めなくて済みます' },
+      { text: '特定の日だけ違うときは、「じぶんの予定」でその日を押して上書きします' }
+    ];
   }
 
-  // 3. いちばん近い成立日
-  if (order.length && order[0] !== full[0] && (!soon.length || order[0] !== soon[0])) {
-    var od = order[0], orr = byDate[od];
-    cands.push({ p: 3, date: od, text: pick([
-      '<b>' + fmtDate(od) + ' ' + orr.s + '〜' + orr.e + '</b> は' + orr.count + '家族そろいそうです。' + orr.act.name + 'が楽しそうですね♪',
-      '<b>' + fmtDate(od) + '</b> の ' + orr.s + '〜' + orr.e + ' なら' + orr.count + '家族。' + orr.act.name + 'によさそうです',
-      '<b>' + fmtDate(od) + ' ' + orr.s + '〜' + orr.e + '</b> に' + orr.count + '家族の予定が重なっています。' + orr.act.name + 'はいかがでしょう♪'
-    ], seed) });
+  var g = [{ text: '日付を押すと、その日の時間帯ごとに、どの家族が空いているかを見られます' }];
+  g.push({ text: '色が濃い日ほど、予定が重なっている家族が多い日です。数字は重なっている家族の数、その下はその時間の始まりです' });
+  if (mine < days) {
+    g.push({ text: '自分の予定は「じぶんの予定」から入れます。入れた分はすぐ全員の画面に出ます' });
   }
-
-  /*
-   * 2.8 種目は決まらないが、予定は重なっている日。
-   *
-   * 各アクティビティには時間の枠がある（バレーは18:00〜22:00 など）。
-   * みんなが空いている時間がその枠から外れていると、どの種目も成立せず、
-   * カレンダーに「3」と出ているのにカードは何も言わない、という状態になる。
-   * その日をここで拾って、ズレていることまで伝える。
-   */
-  var plainOnly = plain.filter(function (x) { return !byDate[x.date]; });
-  if (plainOnly.length) {
-    var px = plainOnly[0], pw = whenWord(px.date) || fmtDate(px.date);
-    // 今日・明日の話は先に出す。日が近いほど動きようがあるため
-    var pp = daysFromToday(px.date) <= 3 ? 2.2 : 2.8;
-    cands.push({ p: pp, date: px.date, text: pick([
-      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> は' + px.r.count + '家族の予定が重なっています',
-      '<b>' + pw + '</b> の ' + px.r.s + '〜' + px.r.e + ' なら' + px.r.count + '家族そろいそうです',
-      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> に' + px.r.count + '家族。何をするか決めるとよさそうですね'
-    ], seed) });
-  }
-
-  // 3.5 「この種目で」と選んでいる家族が複数いる日
-  order.slice(0, 6).forEach(function (dt) {
-    var rr = byDate[dt];
-    if (rr.tagged >= 2) {
-      cands.push({ p: 2.5, date: dt, text: pick([
-        '<b>' + fmtShort(dt) + '</b> は' + rr.tagged + '家族が' + rr.act.name + 'を選んでいます。' + rr.s + '〜' + rr.e + ' に' + rr.count + '家族そろいそうです♪',
-        '<b>' + fmtShort(dt) + '</b> は' + rr.act.name + 'で登録している家族が' + rr.tagged + '組いますね♪'
-      ], seed) });
-    }
-  });
-
-  // 3.6 やりたいことが分かれている日（種目が成立していない日も見る）
-  var withPlain = order.concat(plainOnly.map(function (x) { return x.date; }));
-  withPlain.slice(0, 6).forEach(function (dt) {
-    var tc = tagCounts(dt);
-    var named = Object.keys(tc);
-    if (named.length >= 2) {
-      var label = named.slice(0, 3).map(actName).join('と');
-      cands.push({ p: 4.5, date: dt, text: pick([
-        '<b>' + fmtShort(dt) + '</b> は' + label + 'で登録が分かれています。相談してみるとよさそうですね',
-        '<b>' + fmtShort(dt) + '</b> は' + label + '、それぞれ希望があるようです'
-      ], seed) });
-    }
-  });
-
-  // 4. 連続して空いている日（泊まりや遠出が狙える）
-  for (var i = 0; i + 1 < order.length; i++) {
-    if (daysFromToday(order[i + 1]) - daysFromToday(order[i]) === 1) {
-      cands.push({ p: 4, date: order[i], text: pick([
-        '<b>' + fmtShort(order[i]) + 'と' + fmtShort(order[i + 1]) + '</b> が続けて空いていそうです。ゆっくり過ごせるかもしれませんね♪',
-        '<b>' + fmtShort(order[i]) + '・' + fmtShort(order[i + 1]) + '</b> は2日続きです。少し遠出もできるかもしれません♪'
-      ], seed) });
-      break;
-    }
-  }
-
-  // 5. あと1家族で成立
-  if (near.length) {
-    var nx = near[0];
-    cands.push({ p: 5, date: nx.date, text: pick([
-      '<b>' + fmtDate(nx.date) + '</b> は、もう1家族ぶん予定が重なると' + nx.r.act.name + 'ができそうです',
-      '<b>' + fmtDate(nx.date) + '</b> は' + nx.r.act.name + 'まであと少しのようです',
-      '<b>' + fmtDate(nx.date) + '</b>、あと1家族ぶんで' + nx.r.act.name + 'が見えてきそうです'
-    ], seed) });
-  }
-
-  // 6. 自分の未登録
-  if (mine >= 3) {
-    cands.push({ p: 6, flat: true, text: pick([
-      '空いている日を登録しておくと、候補が見つかりやすくなります',
-      '「じぶんの予定」に時間を入れておくと、予定を合わせやすくなります',
-      'まだ登録していない日があります。入れておくと候補が増えるかもしれません'
-    ], seed) });
-  }
-
-  // 7. ほかの候補
-  var rest = order.slice(1, 4).map(function (dt) { return fmtShort(dt) + ' ' + byDate[dt].act.name; });
-  if (rest.length) {
-    cands.push({ p: 7, date: order[1], text: pick([
-      'ほかに <b>' + rest.join('</b>、<b>') + '</b> も候補になりそうです',
-      '<b>' + rest.join('</b>、<b>') + '</b> も予定が重なっています'
-    ], seed) + (order.length > 4 ? '。まだ他にもあります' : '') });
-  }
-
-  // 8. ゲスト家だけ参加できる日
-  if (guestOnly.length) {
-    var gd = guestOnly[0];
-    cands.push({ p: 8, date: gd.date, text: '<b>' + fmtDate(gd.date) + '</b> はゲスト家が参加できそうです（' + gd.r.s + '〜' + gd.r.e + '）' });
-  }
-
-  // 10. まだ何もないとき（重なっている日が1つでもあれば出さない）
-  if (!order.length && !near.length && !plain.length) {
-    cands.push({ p: 1.5, flat: true, text: pick([
-      'まずは「じぶんの予定」から、遊べそうな時間を入れてみてください',
-      '登録が集まると、ここに候補が並びます',
-      '「いつも遊べる日」を先に決めておくと、あとが楽かもしれません'
-    ], seed) });
-  }
-
-  // 11. 季節のおすすめ（毎日ちがう組み合わせを見せる）
-  var sm = Number((order.length ? order[0] : S.ym + '-01').slice(5, 7));
-  var items = (SEASON[sm] || []).slice();
-  if (items.length) {
-    var shown = [];
-    for (var k = 0; k < Math.min(3, items.length); k++) {
-      shown.push(items[(seed + k) % items.length]);
-    }
-    cands.push({ p: 10, flat: true, text: pick([
-      sm + '月は ' + shown.join('・') + ' の頃ですね',
-      'この時期は ' + shown.join('・') + ' などいかがでしょう',
-      sm + '月の楽しみは ' + shown.join('・') + ' あたりでしょうか'
-    ], seed) });
-  }
-
-  cands.sort(function (a, b) { return a.p - b.p; });
-
-  // 同じ日の話が並ぶと情報が増えないので、日付が重ならないように選ぶ
-  var out = [], usedDate = {};
-  cands.forEach(function (c) {
-    if (out.length >= 3) return;
-    if (c.date) {
-      if (usedDate[c.date]) return;
-      usedDate[c.date] = true;
-    }
-    out.push(c);
-  });
-
-  // ふだんは2枚。行動につながるもの（あと1家族・未登録）があるときだけ3枚にする
-  if (out.length === 3) {
-    var actionable = out[2] && (out[2].p === 5 || out[2].p === 6);
-    if (!actionable) out = out.slice(0, 2);
-  }
-  return out;
+  return g.slice(0, 3);
 }
 
 /* ---------- 一覧の描画 ---------- */
@@ -943,12 +693,14 @@ function dowRow() {
   return '<div class="dow">' + DOW.map(function (d) { return '<div>' + d + '</div>'; }).join('') + '</div>';
 }
 
-function renderAgg() {
-  var advice = '<div class="card"><div class="advice">' + buildAdvice().map(function (a) {
-    return '<div class="ad' + (a.flat ? ' flat' : '') + '"' + (a.date ? ' data-date="' + a.date + '"' : '') +
-      '><span class="dot"></span><span>' + a.text + '</span></div>';
+/** 使い方の案内カード。3つのタブそれぞれの下に出す */
+function guideCard() {
+  return '<div class="card"><div class="advice">' + buildGuide().map(function (a) {
+    return '<div class="ad flat"><span class="dot"></span><span>' + a.text + '</span></div>';
   }).join('') + '</div></div>';
+}
 
+function renderAgg() {
   var cells = '';
   var fd = firstDow(S.ym), n = daysIn(S.ym), p = parseYm(S.ym);
   for (var i = 0; i < fd; i++) cells += '<div class="cell empty"></div>';
@@ -965,9 +717,9 @@ function renderAgg() {
       '</div>';
   }
 
-  // カレンダーが先。まず日付を見て、そのうえで気づいたことを下で読んでもらう
+  // カレンダーが先。使い方の案内はその下に置く
   return '<div class="card">' + monthBar() + dowRow() +
-    '<div class="grid">' + cells + '</div></div>' + advice;
+    '<div class="grid">' + cells + '</div></div>' + guideCard();
 }
 
 function renderMine() {
@@ -994,8 +746,8 @@ function renderMine() {
     cells += '<div class="cell plain" data-date="' + date + '" style="' + (eff.over ? '' : 'opacity:.72') + '">' +
       '<span>' + d + '</span><span class="mini">' + bars + '</span></div>';
   }
-  return '<div class="card">' + monthBar() + dowRow() + '<div class="grid">' + cells + '</div>' +
-    '<p class="note">バーが薄い日は平常パターンのまま、濃い日はその日だけ登録した時間帯です。日付を押すと編集できます。</p></div>';
+  return '<div class="card">' + monthBar() + dowRow() +
+    '<div class="grid">' + cells + '</div></div>' + guideCard();
 }
 
 function renderWeekly() {
@@ -1010,9 +762,8 @@ function renderWeekly() {
     rows += '<div class="wrow" data-wd="' + wd + '"><span class="d">' + DOW[wd] + '</span>' +
       '<span class="rs">' + rs + '</span><span class="go">›</span></div>';
   }
-  return '<div class="card"><h2 style="font-size:17px;margin:0 0 2px">いつも遊べる日</h2>' +
-    '<p class="sub">いつもの週で遊べる時間帯を登録しておきます。特定の日だけ違うときは「じぶんの予定」で上書きします。</p>' +
-    rows + '</div>';
+  return '<div class="card"><h2 style="font-size:17px;margin:0 0 12px">いつも遊べる日</h2>' +
+    rows + '</div>' + guideCard();
 }
 
 /* ---------- ポップアップ ---------- */
@@ -1050,27 +801,44 @@ function sheetHeader(title) {
 
 function timeline(rows, w, band) {
   var span = w[1] - w[0];
+  var pct = function (m) { return (m - w[0]) / span * 100; };
+
+  // 1時間ごとの目盛り。3時間ごとは濃くして、時刻の見当をつけやすくする
+  var ticks = '';
+  for (var tm = Math.ceil(w[0] / 60) * 60; tm <= w[1]; tm += 60) {
+    ticks += '<i class="tk' + ((tm / 60) % 3 === 0 ? ' mj' : '') + '" style="left:' + pct(tm) + '%"></i>';
+  }
+
   function bars(ranges) {
-    if (!ranges) return '<span class="none">未回答</span>';
-    return ranges.map(function (r) {
+    if (!ranges) return ticks + '<span class="none">未回答</span>';
+    return ticks + ranges.map(function (r) {
       var a = Math.max(w[0], t2m(r.s)), b = Math.min(w[1], t2m(r.e));
       if (b <= a) return '';
       var c = r.st === 'O' ? 'var(--ok-full)' : r.st === 'M' ? 'var(--maybe-dot)' : 'var(--no-dot)';
-      return '<i style="left:' + ((a - w[0]) / span * 100) + '%;width:' + ((b - a) / span * 100) +
+      return '<i class="bar" style="left:' + pct(a) + '%;width:' + ((b - a) / span * 100) +
         '%;background:' + c + '"></i>';
     }).join('');
   }
+
   var html = '<div class="tlwrap"><div class="tlrows">';
   if (band) {
     html += '<div class="bandwrap"><div></div><div class="bt"><div class="band" style="left:' +
-      ((t2m(band[0]) - w[0]) / span * 100) + '%;width:' + ((t2m(band[1]) - t2m(band[0])) / span * 100) + '%"></div></div></div>';
+      pct(t2m(band[0])) + '%;width:' + ((t2m(band[1]) - t2m(band[0])) / span * 100) + '%"></div></div></div>';
   }
   html += rows.map(function (r) {
     return '<div class="tlrow"><span class="nm"' + (r.guest ? ' style="color:var(--muted)"' : '') + '>' +
       r.name + '</span><span class="track">' + bars(r.ranges) + '</span></div>';
   }).join('');
-  html += '</div><div class="tlaxis"><span></span><span class="ax"><span>' + m2t(w[0]) + '</span><span>' +
-    m2t(Math.round((w[0] + w[1]) / 2 / STEP) * STEP) + '</span><span>' + m2t(w[1]) + '</span></span></div>';
+
+  // 目盛りは1時間おき、数字は3時間おき。全部書くと狭い画面で潰れる
+  var labels = '';
+  for (var lm = Math.ceil(w[0] / 60) * 60; lm <= w[1]; lm += 60) {
+    if ((lm / 60) % 3 !== 0) continue;
+    // 狭い画面では6時間おきだけ残す。3時間おきだと数字が重なる
+    labels += '<span class="' + ((lm / 60) % 6 === 0 ? 'h6' : 'h3') + '" style="left:' + pct(lm) + '%">' +
+      m2t(lm) + '</span>';
+  }
+  html += '</div><div class="tlaxis"><span></span><span class="ax">' + labels + '</span></div>';
   return html + '</div>';
 }
 
@@ -1085,23 +853,12 @@ function sheetDetail() {
     return { name: h.name, ranges: eff.ranges, guest: h.guest };
   });
 
-  var verdict = sum.count >= sum.min
-    ? '<b>' + sum.s + '〜' + sum.e + '</b> なら ' + sum.count + '家族' +
+  // 「何家族そろえば成立」という見方はしない。重なっている時間と数をそのまま出す
+  var verdict = sum.count >= 1
+    ? '<b>' + sum.s + '〜' + sum.e + '</b> に ' + sum.count + '家族' +
       (sum.guest ? '＋ゲスト' + sum.guest : '') + (sum.maybe ? '（△が' + sum.maybe + '家族）' : '')
-    : (sum.count >= 2 ? sum.s + '〜' + sum.e + ' で ' + sum.count + '家族どまり'
-       : sum.count === 1 ? sum.s + '〜' + sum.e + ' に1家族だけ'
-       : sum.guest ? 'ゲスト家が ' + sum.s + '〜' + sum.e + ' に参加できます'
-       : '揃う時間帯がまだありません') +
-      (sum.un ? '（未回答' + sum.un + '家族）' : '');
-
-  var acts = activitiesOn(date).map(function (a) {
-    var r = summarize(date, a);
-    return '<div class="arow"><span class="an">' + a.name + '</span>' +
-      (r.count >= r.min
-        ? '<span class="ay">' + r.s + '〜' + r.e + '　' + r.count + '家族' + (r.guest ? '＋ゲスト' : '') + '</span>'
-        : '<span class="ann">' + (r.count >= 1 ? r.count + '家族どまり' : 'まだ揃いません') + '</span>') +
-      '</div>';
-  }).join('');
+    : (sum.guest ? 'ゲスト家が ' + sum.s + '〜' + sum.e + ' に来られます' : 'まだ登録がありません');
+  if (sum.un) verdict += '（未回答' + sum.un + '家族）';
 
   var memos = [];
   all.forEach(function (h) {
@@ -1113,8 +870,7 @@ function sheetDetail() {
   return sheetHeader((d.getMonth() + 1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）') +
     '<p class="sub">' + verdict + '</p>' +
     timeline(rows, [DAY_S, DAY_E], sum.count >= 2 ? [sum.s, sum.e] : null) +
-    (memos.length ? '<p class="note">' + memos.join(' / ') + '</p>' : '') +
-    acts;
+    (memos.length ? '<p class="note">' + memos.join(' / ') + '</p>' : '');
 }
 
 function timeOptions(sel, from, to) {
