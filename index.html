@@ -808,22 +808,12 @@ function buildAdvice() {
   var plainOnly = plain.filter(function (x) { return !byDate[x.date]; });
   if (plainOnly.length) {
     var px = plainOnly[0], pw = whenWord(px.date) || fmtDate(px.date);
-    var tc0 = tagCounts(px.date), named0 = Object.keys(tc0);
-    var hint = '';
-    if (named0.length === 1) {
-      var pa = S.activities.filter(function (x) { return x.id === named0[0]; })[0];
-      // 選ばれている種目の時間枠と、実際に重なっている時間がすれ違っているとき
-      if (pa && (px.r.e <= pa.ws || px.r.s >= pa.we)) {
-        hint = '。' + pa.name + 'は ' + pa.ws + '〜' + pa.we + ' あたりを想定しているので、' +
-          '時間をずらすと合うかもしれません';
-      }
-    }
     // 今日・明日の話は先に出す。日が近いほど動きようがあるため
     var pp = daysFromToday(px.date) <= 3 ? 2.2 : 2.8;
     cands.push({ p: pp, date: px.date, text: pick([
-      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> は' + px.r.count + '家族の予定が重なっています' + hint,
-      '<b>' + pw + '</b> の ' + px.r.s + '〜' + px.r.e + ' なら' + px.r.count + '家族そろいそうです' + hint,
-      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> に' + px.r.count + '家族。何をするか決めるとよさそうですね' + hint
+      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> は' + px.r.count + '家族の予定が重なっています',
+      '<b>' + pw + '</b> の ' + px.r.s + '〜' + px.r.e + ' なら' + px.r.count + '家族そろいそうです',
+      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> に' + px.r.count + '家族。何をするか決めるとよさそうですね'
     ], seed) });
   }
 
