@@ -889,24 +889,38 @@ function layoutTimeAxis() {
     var w = ax.getBoundingClientRect().width;
     if (!w) return;
     Array.prototype.forEach.call(ax.querySelectorAll('i.lead'), function (i) { i.remove(); });
-    var ends = [];   // 段ごとに、いま埋まっている右端
+    var used = [[]];   // 段ごとに、埋まっている範囲
     var leads = '';
-    spans.forEach(function (s) {
+
+    function place(s, maxRow) {
       var sw = s.getBoundingClientRect().width;
       var at = w * Number(s.dataset.pct) / 100;
       var left = at - sw / 2;
       if (left < 0) left = 0;
       if (left + sw > w) left = w - sw;
-      var r = 0;
-      while (ends[r] != null && left < ends[r] + GAP) r++;
-      ends[r] = left + sw;
-      s.style.left = left + 'px';
-      s.style.top = (r * ROW_H) + 'px';
-      // 下の段に落とした数字は、どの位置のことか分からなくなる。線で結ぶ
-      if (r > 0) leads += '<i class="lead" style="left:' + at + 'px;height:' + (r * ROW_H + 1) + 'px"></i>';
+      for (var r = 0; maxRow == null || r <= maxRow; r++) {
+        if (!used[r]) used[r] = [];
+        var hit = used[r].some(function (x) { return left < x[1] + GAP && x[0] < left + sw + GAP; });
+        if (hit) continue;
+        used[r].push([left, left + sw]);
+        s.style.left = left + 'px';
+        s.style.top = (r * ROW_H) + 'px';
+        // 下の段に落とした数字は、どの位置のことか分からなくなる。線で結ぶ
+        if (r > 0) leads += '<i class="lead" style="left:' + at + 'px;height:' + (r * ROW_H + 1) + 'px"></i>';
+        return true;
+      }
+      return false;
+    }
+
+    // 予定の切れ目を先に置く。両端（06:00 / 23:00）は目安なので、
+    // 1段目に収まるときだけ出す。これのために段が増えるのは本末転倒
+    spans.forEach(function (s) { if (s.className === 'pt') place(s, null); });
+    spans.forEach(function (s) {
+      if (s.className === 'anc' && !place(s, 0)) s.style.display = 'none';
     });
+
     ax.insertAdjacentHTML('afterbegin', leads);
-    ax.style.height = (ends.length * ROW_H) + 'px';
+    ax.style.height = (used.length * ROW_H) + 'px';
   });
 }
 
