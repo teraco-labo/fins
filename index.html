@@ -729,7 +729,7 @@ function buildAdvice() {
   var today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  var byDate = {}, order = [], near = [], guestOnly = [], mine = 0;
+  var byDate = {}, order = [], near = [], guestOnly = [], plain = [], mine = 0;
 
   (S.months || [S.ym]).forEach(function (ym) {
     var p = parseYm(ym), n = daysIn(ym);
@@ -756,6 +756,10 @@ function buildAdvice() {
       else if (nr) near.push({ date: date, r: nr });
       else if (g) guestOnly.push({ date: date, r: g });
 
+      // 種目を問わない重なり。カレンダーの数字はこれで出しているので、
+      // ここを見ないとカレンダーに「3」と出ている日をカードが一言も触れないことになる
+      var ds = daySummary(date);
+      if (ds.count >= 2) plain.push({ date: date, r: ds });
     }
   });
 
@@ -793,6 +797,36 @@ function buildAdvice() {
     ], seed) });
   }
 
+  /*
+   * 2.8 種目は決まらないが、予定は重なっている日。
+   *
+   * 各アクティビティには時間の枠がある（バレーは18:00〜22:00 など）。
+   * みんなが空いている時間がその枠から外れていると、どの種目も成立せず、
+   * カレンダーに「3」と出ているのにカードは何も言わない、という状態になる。
+   * その日をここで拾って、ズレていることまで伝える。
+   */
+  var plainOnly = plain.filter(function (x) { return !byDate[x.date]; });
+  if (plainOnly.length) {
+    var px = plainOnly[0], pw = whenWord(px.date) || fmtDate(px.date);
+    var tc0 = tagCounts(px.date), named0 = Object.keys(tc0);
+    var hint = '';
+    if (named0.length === 1) {
+      var pa = S.activities.filter(function (x) { return x.id === named0[0]; })[0];
+      // 選ばれている種目の時間枠と、実際に重なっている時間がすれ違っているとき
+      if (pa && (px.r.e <= pa.ws || px.r.s >= pa.we)) {
+        hint = '。' + pa.name + 'は ' + pa.ws + '〜' + pa.we + ' あたりを想定しているので、' +
+          '時間をずらすと合うかもしれません';
+      }
+    }
+    // 今日・明日の話は先に出す。日が近いほど動きようがあるため
+    var pp = daysFromToday(px.date) <= 3 ? 2.2 : 2.8;
+    cands.push({ p: pp, date: px.date, text: pick([
+      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> は' + px.r.count + '家族の予定が重なっています' + hint,
+      '<b>' + pw + '</b> の ' + px.r.s + '〜' + px.r.e + ' なら' + px.r.count + '家族そろいそうです' + hint,
+      '<b>' + pw + ' ' + px.r.s + '〜' + px.r.e + '</b> に' + px.r.count + '家族。何をするか決めるとよさそうですね' + hint
+    ], seed) });
+  }
+
   // 3.5 「この種目で」と選んでいる家族が複数いる日
   order.slice(0, 6).forEach(function (dt) {
     var rr = byDate[dt];
@@ -804,8 +838,9 @@ function buildAdvice() {
     }
   });
 
-  // 3.6 やりたいことが分かれている日
-  order.slice(0, 6).forEach(function (dt) {
+  // 3.6 やりたいことが分かれている日（種目が成立していない日も見る）
+  var withPlain = order.concat(plainOnly.map(function (x) { return x.date; }));
+  withPlain.slice(0, 6).forEach(function (dt) {
     var tc = tagCounts(dt);
     var named = Object.keys(tc);
     if (named.length >= 2) {
@@ -862,8 +897,8 @@ function buildAdvice() {
     cands.push({ p: 8, date: gd.date, text: '<b>' + fmtDate(gd.date) + '</b> はゲスト家が参加できそうです（' + gd.r.s + '〜' + gd.r.e + '）' });
   }
 
-  // 10. まだ何もないとき
-  if (!order.length && !near.length) {
+  // 10. まだ何もないとき（重なっている日が1つでもあれば出さない）
+  if (!order.length && !near.length && !plain.length) {
     cands.push({ p: 1.5, flat: true, text: pick([
       'まずは「じぶんの予定」から、遊べそうな時間を入れてみてください',
       '登録が集まると、ここに候補が並びます',
