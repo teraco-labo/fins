@@ -651,10 +651,41 @@ function fmtShort(date) {
  *   3. 季節のおすすめ
  *   4. お知らせ（あと1家族・未回答をまとめる）
  */
+/**
+ * アナウンスの文面。状況ごとに複数の言い回しを持たせて、日によって変える。
+ * 同じ文が出続けると読まれなくなるため。
+ */
+function pick(arr, seed) { return arr[Math.abs(seed) % arr.length]; }
+
+/** その日ごとに変わる種。同じ日のうちは文面が固定される */
+function todaySeed() {
+  var d = new Date();
+  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
+}
+
+function daysFromToday(date) {
+  var t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.round((new Date(date + 'T00:00:00') - t) / 86400000);
+}
+
+function whenWord(date) {
+  var n = daysFromToday(date);
+  if (n === 0) return '今日';
+  if (n === 1) return '明日';
+  if (n === 2) return 'あさって';
+  return null;
+}
+
+/**
+ * 月内と翌月を裏で全部計算して、状況に合う案内を作る。
+ * 優先度の高いものから2枚、行動につながるものがあれば3枚まで出す。
+ */
 function buildAdvice() {
+  var seed = todaySeed();
   var today = new Date();
   today.setHours(0, 0, 0, 0);
-  var byDate = {}, order = [], near = [], mine = 0;
+
+  var byDate = {}, order = [], near = [], guestOnly = [], mine = 0;
 
   (S.months || [S.ym]).forEach(function (ym) {
     var p = parseYm(ym), n = daysIn(ym);
@@ -663,7 +694,7 @@ function buildAdvice() {
       if (new Date(date + 'T00:00:00') < today) continue;
       if (ym === S.ym && !gridOf(S.me.id, date)) mine++;
 
-      var best = null, nr = null;
+      var best = null, nr = null, g = null;
       activitiesOn(date).forEach(function (a) {
         var r = summarize(date, a);
         if (r.count >= r.min) {
@@ -673,65 +704,131 @@ function buildAdvice() {
           if (better) best = r;
         } else if (r.count >= 1 && r.count === r.min - 1) {
           if (!nr || r.count > nr.count) nr = r;
+        } else if (r.count === 0 && r.guest) {
+          if (!g) g = r;
         }
       });
       if (best) { byDate[date] = best; order.push(date); }
       else if (nr) near.push({ date: date, r: nr });
+      else if (g) guestOnly.push({ date: date, r: g });
+
     }
   });
 
-  var out = [];
+  var cands = [];
+  var full = order.filter(function (d) { return byDate[d].count >= byDate[d].total; });
 
-  if (order.length) {
-    var d0 = order[0], r0 = byDate[d0];
-    out.push({
-      date: d0,
-      text: '<b>' + fmtDate(d0) + ' ' + r0.s + '〜' + r0.e + '</b> は' +
-        r0.count + '家族そろいます' + (r0.count >= r0.total ? '（全員）' : '') + '。' +
-        r0.act.name + 'が楽しそうですね♪' +
-        (r0.guest ? ' ゲスト家も参加できます。' : '') +
-        (r0.maybe ? ' あと' + r0.maybe + '家族が△です。' : '')
-    });
+  // 1. 全員そろう日
+  if (full.length) {
+    var fd = full[0], fr = byDate[fd], w = whenWord(fd);
+    cands.push({ p: 1, date: fd, text: pick([
+      '<b>' + (w || fmtDate(fd)) + ' ' + fr.s + '〜' + fr.e + '</b> は4家族とも空いていそうです。' + fr.act.name + 'が楽しめそうですね♪',
+      '<b>' + fmtDate(fd) + ' ' + fr.s + '〜' + fr.e + '</b>、みんなの予定が重なっています。' + fr.act.name + 'にいい時間かもしれません♪',
+      '<b>' + fmtDate(fd) + '</b> の ' + fr.s + '〜' + fr.e + ' なら4家族そろいそうです。' + fr.act.name + 'はいかがでしょう♪'
+    ], seed) });
+  }
 
-    // 2件目以降はまとめて1行にする。同じ文が並ぶと読み飛ばされるため
-    var rest = order.slice(1, 4).map(function (dt) {
-      return fmtShort(dt) + ' ' + byDate[dt].act.name;
-    });
-    if (rest.length) {
-      out.push({
-        date: order[1],
-        text: 'ほかに <b>' + rest.join('</b>、<b>') + '</b> も候補です。' +
-          (order.length > 4 ? 'まだ他にもあります。' : '')
-      });
+  // 2. すぐ先（3日以内）に成立する日
+  var soon = order.filter(function (d) { var n = daysFromToday(d); return n >= 0 && n <= 3; });
+  if (soon.length && soon[0] !== full[0]) {
+    var sd = soon[0], sr = byDate[sd], sw = whenWord(sd) || fmtShort(sd);
+    cands.push({ p: 2, date: sd, text: pick([
+      '<b>' + sw + ' ' + sr.s + '〜' + sr.e + '</b> は' + sr.count + '家族の予定が重なっています。' + sr.act.name + 'が楽しそうですね♪',
+      '<b>' + sw + ' ' + sr.s + '〜' + sr.e + '</b> なら' + sr.count + '家族そろいそうです',
+      '<b>' + sw + '</b>、' + sr.s + '〜' + sr.e + ' で' + sr.count + '家族。' + sr.act.name + 'によさそうですね♪'
+    ], seed) });
+  }
+
+  // 3. いちばん近い成立日
+  if (order.length && order[0] !== full[0] && (!soon.length || order[0] !== soon[0])) {
+    var od = order[0], orr = byDate[od];
+    cands.push({ p: 3, date: od, text: pick([
+      '<b>' + fmtDate(od) + ' ' + orr.s + '〜' + orr.e + '</b> は' + orr.count + '家族そろいそうです。' + orr.act.name + 'が楽しそうですね♪',
+      '<b>' + fmtDate(od) + '</b> の ' + orr.s + '〜' + orr.e + ' なら' + orr.count + '家族。' + orr.act.name + 'によさそうです',
+      '<b>' + fmtDate(od) + ' ' + orr.s + '〜' + orr.e + '</b> に' + orr.count + '家族の予定が重なっています。' + orr.act.name + 'はいかがでしょう♪'
+    ], seed) });
+  }
+
+  // 4. 連続して空いている日（泊まりや遠出が狙える）
+  for (var i = 0; i + 1 < order.length; i++) {
+    if (daysFromToday(order[i + 1]) - daysFromToday(order[i]) === 1) {
+      cands.push({ p: 4, date: order[i], text: pick([
+        '<b>' + fmtShort(order[i]) + 'と' + fmtShort(order[i + 1]) + '</b> が続けて空いていそうです。ゆっくり過ごせるかもしれませんね♪',
+        '<b>' + fmtShort(order[i]) + '・' + fmtShort(order[i + 1]) + '</b> は2日続きです。少し遠出もできるかもしれません♪'
+      ], seed) });
+      break;
     }
-  } else {
-    out.push({
-      flat: true,
-      text: 'いまのところ揃う日がありません。まずは「じぶんの予定」で遊べる時間を入れてみてください。'
-    });
   }
 
-  // 季節のおすすめ。候補日があればその月、なければ表示中の月で出す
+  // 5. あと1家族で成立
+  if (near.length) {
+    var nx = near[0];
+    cands.push({ p: 5, date: nx.date, text: pick([
+      '<b>' + fmtDate(nx.date) + '</b> は、もう1家族ぶん予定が重なると' + nx.r.act.name + 'ができそうです',
+      '<b>' + fmtDate(nx.date) + '</b> は' + nx.r.act.name + 'まであと少しのようです',
+      '<b>' + fmtDate(nx.date) + '</b>、あと1家族ぶんで' + nx.r.act.name + 'が見えてきそうです'
+    ], seed) });
+  }
+
+  // 6. 自分の未登録
+  if (mine >= 3) {
+    cands.push({ p: 6, flat: true, text: pick([
+      '空いている日を登録しておくと、候補が見つかりやすくなります',
+      '「じぶんの予定」に時間を入れておくと、予定を合わせやすくなります',
+      'まだ登録していない日があります。入れておくと候補が増えるかもしれません'
+    ], seed) });
+  }
+
+  // 7. ほかの候補
+  var rest = order.slice(1, 4).map(function (dt) { return fmtShort(dt) + ' ' + byDate[dt].act.name; });
+  if (rest.length) {
+    cands.push({ p: 7, date: order[1], text: pick([
+      'ほかに <b>' + rest.join('</b>、<b>') + '</b> も候補になりそうです',
+      '<b>' + rest.join('</b>、<b>') + '</b> も予定が重なっています'
+    ], seed) + (order.length > 4 ? '。まだ他にもあります' : '') });
+  }
+
+  // 8. ゲスト家だけ参加できる日
+  if (guestOnly.length) {
+    var gd = guestOnly[0];
+    cands.push({ p: 8, date: gd.date, text: '<b>' + fmtDate(gd.date) + '</b> はゲスト家が参加できそうです（' + gd.r.s + '〜' + gd.r.e + '）' });
+  }
+
+  // 10. まだ何もないとき
+  if (!order.length && !near.length) {
+    cands.push({ p: 1.5, flat: true, text: pick([
+      'まずは「じぶんの予定」から、遊べそうな時間を入れてみてください',
+      '登録が集まると、ここに候補が並びます',
+      '「いつも遊べる日」を先に決めておくと、あとが楽かもしれません'
+    ], seed) });
+  }
+
+  // 11. 季節のおすすめ（毎日ちがう組み合わせを見せる）
   var sm = Number((order.length ? order[0] : S.ym + '-01').slice(5, 7));
-  var items = SEASON[sm] || [];
+  var items = (SEASON[sm] || []).slice();
   if (items.length) {
-    out.push({
-      flat: true,
-      text: sm + '月は ' + items.join('・') + ' の季節です。お出かけの相談にもどうぞ。'
-    });
+    var shown = [];
+    for (var k = 0; k < Math.min(3, items.length); k++) {
+      shown.push(items[(seed + k) % items.length]);
+    }
+    cands.push({ p: 10, flat: true, text: pick([
+      sm + '月は ' + shown.join('・') + ' の頃ですね',
+      'この時期は ' + shown.join('・') + ' などいかがでしょう',
+      sm + '月の楽しみは ' + shown.join('・') + ' あたりでしょうか'
+    ], seed) });
   }
 
-  // お知らせは1行にまとめる。候補が十分あるときは「あと1家族」の話は出さない
-  var notes = [];
-  if (near.length && order.length < 3) {
-    notes.push('あと1家族で成立する日が' + near.length + '日あります（' +
-      near.slice(0, 2).map(function (x) { return fmtShort(x.date) + ' ' + x.r.act.name; }).join('、') + 'など）。');
-  }
-  // 候補がまだ無いときは1件目の文で足りているので、未回答の話は重ねない
-  if (mine && order.length) notes.push('今月まだ登録していない日が' + mine + '日あります。');
-  if (notes.length) out.push({ flat: true, text: notes.join(' ') });
+  cands.sort(function (a, b) { return a.p - b.p; });
 
-  return out;
+  // ふだんは2枚。行動につながるもの（あと1家族・未登録・返事待ち）があれば3枚まで
+  var out = cands.slice(0, 2);
+  var third = cands.slice(2).filter(function (c) { return c.p === 5 || c.p === 6; })[0];
+  if (third) out.push(third);
+  else if (cands.length > 2 && out.length === 2) {
+    var extra = cands[2];
+    if (extra && extra.p <= 7) out.push(extra);
+  }
+  return out.slice(0, 3);
 }
 
 /* ---------- 一覧の描画 ---------- */
