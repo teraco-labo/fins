@@ -574,7 +574,24 @@ function summarize(date, a) {
     act: a, count: 0, guest: 0, maybe: 0, total: hs.length, min: minOf(a),
     un: grids.filter(function (g) { return !g; }).length
   };
-  if (bw.score < 1) return res;
+
+  // ゲスト家しか登録がない日も、その日が空っぽに見えないように拾う
+  if (bw.score < 1) {
+    var gonly = guestsOf(a).map(function (h) { return gridOf(h.id, date, a); });
+    var gc = [];
+    for (var k = i0; k < i1; k++) {
+      var n = 0;
+      gonly.forEach(function (g) { if (g && g[k] === 'O') n++; });
+      gc.push(n);
+    }
+    var gbw = bestWindow(gc, needOf(a));
+    if (gbw.score >= 1) {
+      res.guest = gbw.score;
+      res.s = m2t(DAY_S + (i0 + gbw.s) * STEP);
+      res.e = m2t(DAY_S + (i0 + gbw.e + 1) * STEP);
+    }
+    return res;
+  }
 
   var a0 = i0 + bw.s, a1 = i0 + bw.e + 1;
   function covers(g, st) {
@@ -741,11 +758,12 @@ function renderAgg() {
     var date = dateStr(p.y, p.m, d);
     var sum = daySummary(date);
     var f = fillFor(sum);
-    var show = sum.count >= 1;
+    var show = sum.count >= 1 || sum.guest >= 1;
     cells += '<div class="cell' + (f[0] ? '' : ' plain') + '" data-date="' + date + '"' +
       ' style="' + (f[0] ? 'background:' + f[0] + ';' : '') + 'color:' + f[1] + '">' +
       '<span>' + d + '</span>' +
-      (show ? '<span class="n">' + sum.count + (sum.guest ? '+' : '') + '</span><span class="t">' + sum.s + '〜</span>' : '') +
+      (show ? '<span class="n">' + (sum.count >= 1 ? sum.count + (sum.guest ? '+' : '') : 'ゲスト') +
+        '</span><span class="t">' + sum.s + '〜</span>' : '') +
       '</div>';
   }
 
@@ -870,7 +888,10 @@ function sheetDetail() {
   var verdict = sum.count >= sum.min
     ? '<b>' + sum.s + '〜' + sum.e + '</b> なら ' + sum.count + '家族' +
       (sum.guest ? '＋ゲスト' + sum.guest : '') + (sum.maybe ? '（△が' + sum.maybe + '家族）' : '')
-    : (sum.count >= 2 ? sum.s + '〜' + sum.e + ' で ' + sum.count + '家族どまり' : '揃う時間帯がまだありません') +
+    : (sum.count >= 2 ? sum.s + '〜' + sum.e + ' で ' + sum.count + '家族どまり'
+       : sum.count === 1 ? sum.s + '〜' + sum.e + ' に1家族だけ'
+       : sum.guest ? 'ゲスト家が ' + sum.s + '〜' + sum.e + ' に参加できます'
+       : '揃う時間帯がまだありません') +
       (sum.un ? '（未回答' + sum.un + '家族）' : '');
 
   var acts = activitiesOn(date).map(function (a) {
