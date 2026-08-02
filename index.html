@@ -161,6 +161,13 @@
   .tlaxis .ax span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
   .tlaxis .ax span:first-child { transform: none; }
   .tlaxis .ax span:last-child { transform: translateX(-100%); }
+  /* 予定の切れ目に出す数字。位置と段は layoutTimeAxis が実寸で決める */
+  .tlaxis .ax span[data-pct] { transform: none; transition: none; }
+  .tlaxis .ax span.pt { color: var(--text); font-weight: 600; }
+  .tlaxis .ax span.anc { color: var(--faint); }
+  /* 下の段に落とした数字を、その時刻の位置と線で結ぶ */
+  .tlaxis .ax i.lead { position: absolute; top: 0; width: 1px; background: var(--line2); }
+  .tlaxis { align-items: start; }
 
   /* 時間帯の編集 */
   .rlist { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
@@ -782,6 +789,7 @@ function closeSheet() {
 function drawSheet() {
   document.getElementById('sheet').innerHTML =
     M.kind === 'who' ? sheetWho() : M.kind === 'detail' ? sheetDetail() : sheetEdit();
+  layoutTimeAxis();   // 数字の位置は実寸を測ってから決める
 }
 
 /** 左上のアイコンから開く、家族の選択 */
@@ -830,16 +838,76 @@ function timeline(rows, w, band) {
       r.name + '</span><span class="track">' + bars(r.ranges) + '</span></div>';
   }).join('');
 
-  // 目盛りは1時間おき、数字は3時間おき。全部書くと狭い画面で潰れる
+  /*
+   * 数字を出す位置。
+   * 登録があれば、各家族の開始と終了の時刻をそのまま数字にする。
+   * 「何時から何時までなのか」は、目盛りを数えるより直接書いてあるほうが早い。
+   * 登録が無い日は、いつもどおり時間おきの目盛りだけ出す。
+   */
+  var marks = {};
+  rows.forEach(function (r) {
+    (r.ranges || []).forEach(function (x) {
+      var a = Math.max(w[0], t2m(x.s)), b = Math.min(w[1], t2m(x.e));
+      if (b > a) { marks[a] = 1; marks[b] = 1; }
+    });
+  });
+  var pts = Object.keys(marks).map(Number);
+
   var labels = '';
-  for (var lm = Math.ceil(w[0] / 60) * 60; lm <= w[1]; lm += 60) {
-    if ((lm / 60) % 3 !== 0) continue;
-    // 狭い画面では6時間おきだけ残す。3時間おきだと数字が重なる
-    labels += '<span class="' + ((lm / 60) % 6 === 0 ? 'h6' : 'h3') + '" style="left:' + pct(lm) + '%">' +
-      m2t(lm) + '</span>';
+  if (pts.length) {
+    // 両端も薄く出して、どのくらいの幅の話なのか分かるようにする
+    marks[w[0]] = 1; marks[w[1]] = 1;
+    Object.keys(marks).map(Number).sort(function (p, q) { return p - q; }).forEach(function (m) {
+      var edge = (m === w[0] || m === w[1]) && pts.indexOf(m) < 0;
+      // 位置と段は、画面に入れてから実寸を測って決める（layoutTimeAxis）
+      labels += '<span class="' + (edge ? 'anc' : 'pt') + '" data-pct="' + pct(m) + '">' + m2t(m) + '</span>';
+    });
+  } else {
+    for (var lm = Math.ceil(w[0] / 60) * 60; lm <= w[1]; lm += 60) {
+      if ((lm / 60) % 3 !== 0) continue;
+      // 狭い画面では6時間おきだけ残す。3時間おきだと数字が重なる
+      labels += '<span class="' + ((lm / 60) % 6 === 0 ? 'h6' : 'h3') + '" style="left:' + pct(lm) + '%">' +
+        m2t(lm) + '</span>';
+    }
   }
   html += '</div><div class="tlaxis"><span></span><span class="ax">' + labels + '</span></div>';
   return html + '</div>';
+}
+
+/**
+ * 目盛りの数字を、実寸を測って配置する。
+ *
+ * 予定の切れ目に数字を出すと、隣り合った家族の時刻が近くて重なることがある。
+ * 重なる分は段を増やして下にずらす。文字幅は画面幅で変わるので、
+ * 組み立て時ではなく、画面に入れてから測って決める。
+ */
+function layoutTimeAxis() {
+  var ROW_H = 13, GAP = 5;
+  Array.prototype.forEach.call(document.querySelectorAll('.tlaxis .ax'), function (ax) {
+    var spans = Array.prototype.slice.call(ax.querySelectorAll('span[data-pct]'));
+    if (!spans.length) return;
+    var w = ax.getBoundingClientRect().width;
+    if (!w) return;
+    Array.prototype.forEach.call(ax.querySelectorAll('i.lead'), function (i) { i.remove(); });
+    var ends = [];   // 段ごとに、いま埋まっている右端
+    var leads = '';
+    spans.forEach(function (s) {
+      var sw = s.getBoundingClientRect().width;
+      var at = w * Number(s.dataset.pct) / 100;
+      var left = at - sw / 2;
+      if (left < 0) left = 0;
+      if (left + sw > w) left = w - sw;
+      var r = 0;
+      while (ends[r] != null && left < ends[r] + GAP) r++;
+      ends[r] = left + sw;
+      s.style.left = left + 'px';
+      s.style.top = (r * ROW_H) + 'px';
+      // 下の段に落とした数字は、どの位置のことか分からなくなる。線で結ぶ
+      if (r > 0) leads += '<i class="lead" style="left:' + at + 'px;height:' + (r * ROW_H + 1) + 'px"></i>';
+    });
+    ax.insertAdjacentHTML('afterbegin', leads);
+    ax.style.height = (ends.length * ROW_H) + 'px';
+  });
 }
 
 function sheetDetail() {
