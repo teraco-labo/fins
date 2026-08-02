@@ -521,6 +521,26 @@ function actName(id) {
   return a ? a.name : id;
 }
 
+/**
+ * その日、各家族が「この種目で」と名指しした数を数える。
+ * 何をしたくて空けている日なのかを、案内の文面に反映するために使う。
+ */
+function tagCounts(date) {
+  var out = {};
+  membersOf(null).forEach(function (h) {
+    var eff = effective(h.id, date);
+    if (!eff.ranges) return;
+    var seen = {};
+    eff.ranges.forEach(function (r) {
+      if (r.st !== 'O') return;
+      (r.acts || []).forEach(function (id) {
+        if (!seen[id]) { seen[id] = 1; out[id] = (out[id] || 0) + 1; }
+      });
+    });
+  });
+  return out;
+}
+
 /** その日にできるアクティビティ（季節で絞る）。川遊びは夏だけなど。 */
 function activitiesOn(date) {
   var m = Number(date.slice(5, 7));
@@ -607,6 +627,14 @@ function summarize(date, a) {
     return true;
   }).length;
   res.guest = guestsOf(a).filter(function (h) { return covers(gridOf(h.id, date, a), 'O'); }).length;
+  // その時間に来られる家族のうち、この種目を名指しで選んでいる数
+  res.tagged = a ? hs.filter(function (h, k) {
+    if (!covers(grids[k], 'O')) return false;
+    var eff = effective(h.id, date);
+    return !!(eff.ranges && eff.ranges.some(function (r) {
+      return r.st === 'O' && r.acts && r.acts.length && r.acts.indexOf(a.id) >= 0;
+    }));
+  }).length : 0;
   res.s = m2t(DAY_S + a0 * STEP);
   res.e = m2t(DAY_S + a1 * STEP);
   return res;
@@ -749,6 +777,30 @@ function buildAdvice() {
     ], seed) });
   }
 
+  // 3.5 「この種目で」と選んでいる家族が複数いる日
+  order.slice(0, 6).forEach(function (dt) {
+    var rr = byDate[dt];
+    if (rr.tagged >= 2) {
+      cands.push({ p: 2.5, date: dt, text: pick([
+        '<b>' + fmtShort(dt) + '</b> は' + rr.tagged + '家族が' + rr.act.name + 'を選んでいます。' + rr.s + '〜' + rr.e + ' に' + rr.count + '家族そろいそうです♪',
+        '<b>' + fmtShort(dt) + '</b> は' + rr.act.name + 'で登録している家族が' + rr.tagged + '組いますね♪'
+      ], seed) });
+    }
+  });
+
+  // 3.6 やりたいことが分かれている日
+  order.slice(0, 6).forEach(function (dt) {
+    var tc = tagCounts(dt);
+    var named = Object.keys(tc);
+    if (named.length >= 2) {
+      var label = named.slice(0, 3).map(actName).join('と');
+      cands.push({ p: 4.5, date: dt, text: pick([
+        '<b>' + fmtShort(dt) + '</b> は' + label + 'で登録が分かれています。相談してみるとよさそうですね',
+        '<b>' + fmtShort(dt) + '</b> は' + label + '、それぞれ希望があるようです'
+      ], seed) });
+    }
+  });
+
   // 4. 連続して空いている日（泊まりや遠出が狙える）
   for (var i = 0; i + 1 < order.length; i++) {
     if (daysFromToday(order[i + 1]) - daysFromToday(order[i]) === 1) {
@@ -820,15 +872,23 @@ function buildAdvice() {
 
   cands.sort(function (a, b) { return a.p - b.p; });
 
-  // ふだんは2枚。行動につながるもの（あと1家族・未登録・返事待ち）があれば3枚まで
-  var out = cands.slice(0, 2);
-  var third = cands.slice(2).filter(function (c) { return c.p === 5 || c.p === 6; })[0];
-  if (third) out.push(third);
-  else if (cands.length > 2 && out.length === 2) {
-    var extra = cands[2];
-    if (extra && extra.p <= 7) out.push(extra);
+  // 同じ日の話が並ぶと情報が増えないので、日付が重ならないように選ぶ
+  var out = [], usedDate = {};
+  cands.forEach(function (c) {
+    if (out.length >= 3) return;
+    if (c.date) {
+      if (usedDate[c.date]) return;
+      usedDate[c.date] = true;
+    }
+    out.push(c);
+  });
+
+  // ふだんは2枚。行動につながるもの（あと1家族・未登録）があるときだけ3枚にする
+  if (out.length === 3) {
+    var actionable = out[2] && (out[2].p === 5 || out[2].p === 6);
+    if (!actionable) out = out.slice(0, 2);
   }
-  return out.slice(0, 3);
+  return out;
 }
 
 /* ---------- 一覧の描画 ---------- */
