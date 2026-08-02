@@ -597,10 +597,16 @@ function summarize(date, a) {
 
 function daySummary(date) { return summarize(date, null); }
 
+/**
+ * 日付マスの色。
+ * 1家族だけの日も数字を出す。自分だけ登録した段階で何も出ないと
+ * 「登録が反映されていない」と見えてしまうため。
+ */
 function fillFor(sum) {
   if (sum.count >= sum.total && sum.total > 0) return ['var(--ok-full)', '#ffffff'];
   if (sum.count >= sum.min) return ['var(--ok-mid)', '#1f5a45'];
   if (sum.count >= 2) return ['var(--ok-bg)', 'var(--ok)'];
+  if (sum.count >= 1) return ['', 'var(--ok)'];
   return ['', 'var(--muted)'];
 }
 
@@ -735,7 +741,7 @@ function renderAgg() {
     var date = dateStr(p.y, p.m, d);
     var sum = daySummary(date);
     var f = fillFor(sum);
-    var show = sum.count >= 2;
+    var show = sum.count >= 1;
     cells += '<div class="cell' + (f[0] ? '' : ' plain') + '" data-date="' + date + '"' +
       ' style="' + (f[0] ? 'background:' + f[0] + ';' : '') + 'color:' + f[1] + '">' +
       '<span>' + d + '</span>' +
@@ -1039,6 +1045,18 @@ function loadCache(ym) {
   } catch (e) { return null; }
 }
 
+/**
+ * いま画面が持っている内容を控えに残す。保存のたびに呼ぶ。
+ * これをしないと、開き直したときに古い控えが先に出て
+ * 「入力した内容が消えた」ように見えてしまう。
+ */
+function rememberNow() {
+  saveCache({
+    households: S.households, activities: S.activities,
+    weekly: S.weekly, overrides: S.overrides, months: S.months || [S.ym]
+  });
+}
+
 function applyBoot(b) {
   S.households = b.households;
   S.activities = b.activities;
@@ -1162,7 +1180,7 @@ function persistDraft() {
     }
     render();
     return api('api_setDay', [S.me.id, date, payload])
-      .then(function () { toast('保存しました'); })
+      .then(function () { rememberNow(); toast('保存しました'); })
       .catch(function (err) {
         alert('保存できませんでした: ' + (err.message || err));
         loadMonths(S.ym).then(render);
@@ -1176,6 +1194,7 @@ function persistDraft() {
   return api('api_setWeekly', [S.me.id, grid]).then(function (r) {
     S.weekly = r.weekly;
     render();
+    rememberNow();
     toast('保存しました');
   }).catch(function (err) {
     alert('保存できませんでした: ' + (err.message || err));
