@@ -673,15 +673,11 @@ function fillFor(sum) {
  */
 function buildGuide() {
   var mine = 0, days = 0;
-  (S.months || [S.ym]).forEach(function (ym) {
-    var pm = parseYm(ym), n = daysIn(ym);
-    for (var d = 1; d <= n; d++) {
-      var date = dateStr(pm.y, pm.m, d);
-      if (ym !== S.ym) continue;
-      days++;
-      if (gridOf(S.me.id, date)) mine++;
-    }
-  });
+  var pm = parseYm(S.ym), n = daysIn(S.ym);
+  for (var d = 1; d <= n; d++) {
+    days++;
+    if (gridOf(S.me.id, dateStr(pm.y, pm.m, d))) mine++;
+  }
   var hasWeekly = !!(S.weekly[S.me.id] && Object.keys(S.weekly[S.me.id]).length);
 
   if (S.view === 'mine') {
@@ -1126,15 +1122,24 @@ function loadNextMonth() {
   }).catch(function () { /* 取れなくても当月だけで動く */ });
 }
 
-/** 表示中の月と翌月をまとめて読み込む（1往復）。 */
+/** 全期間ぶんが返ってきたか。古い画面が落ちないよう、配列で受け渡している */
+function isAll(m) { return !!m && m[0] === 'all'; }
+
+/** 全期間ぶんをまとめて読み込む（1往復）。 */
 function loadMonths(ym) {
   return fetchBoot(ym).then(function (b) {
     S.households = b.households;
     S.activities = b.activities;
     S.weekly = b.weekly || {};
-    S.overrides = b.overrides || {};
+    if (isAll(b.months)) {
+      S.overrides = b.overrides || {};
+    } else {
+      // 古いサーバーは月ぶんしか返さない。手元にある他の月を消さないよう混ぜる
+      Object.keys(b.overrides || {}).forEach(function (d) { S.overrides[d] = b.overrides[d]; });
+    }
     S.months = b.months;
-    saveCache(b);
+    saveCache({ households: S.households, activities: S.activities, weekly: S.weekly,
+                overrides: S.overrides, months: S.months });
   });
 }
 
@@ -1143,13 +1148,13 @@ function loadMonths(ym) {
 var CACHE_KEY = 'fins-cache';
 
 function saveCache(b) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ym: b.months[0], data: b })); } catch (e) { /* 使えなければ諦める */ }
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: b })); } catch (e) { /* 使えなければ諦める */ }
 }
 
-function loadCache(ym) {
+function loadCache() {
   try {
     var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    return (c && c.ym === ym) ? c.data : null;
+    return (c && c.data) ? c.data : null;
   } catch (e) { return null; }
 }
 
@@ -1161,7 +1166,7 @@ function loadCache(ym) {
 function rememberNow() {
   saveCache({
     households: S.households, activities: S.activities,
-    weekly: S.weekly, overrides: S.overrides, months: S.months || [S.ym]
+    weekly: S.weekly, overrides: S.overrides, months: S.months || ['all']
   });
 }
 
@@ -1205,8 +1210,11 @@ document.getElementById('app').addEventListener('click', function (e) {
   var t = e.target.closest('[data-nav],[data-date],[data-wd]');
   if (!t) return;
   if (t.dataset.nav) {
+    // 通信を待たずにその場で描く。登録は全期間ぶん手元にあるので待つ理由がない。
+    // 待たせると「効いていない」と思われて何度も押されることになる
     S.ym = shiftYm(S.ym, Number(t.dataset.nav));
-    loadMonths(S.ym).then(render);
+    render();
+    refresh();
   } else if (t.dataset.date) {
     var date = t.dataset.date;
     if (S.view !== 'agg') return openDayEditor(date);
@@ -1214,7 +1222,6 @@ document.getElementById('app').addEventListener('click', function (e) {
     if (date.slice(0, 7) !== S.ym) {
       S.ym = date.slice(0, 7);
       render();
-      loadMonths(S.ym).then(render);
     }
     openSheet({ kind: 'detail', date: date });
   } else if (t.dataset.wd) {
@@ -1396,13 +1403,18 @@ document.getElementById('reload').addEventListener('click', function () {
  * 送信を待っている内容があるあいだは読み直さない。
  * まだサーバーに届いていない自分の入力を、古い内容で上書きしてしまうため。
  */
+var loading = null;   // 走っている読み直し。連打しても1本にまとめる
+
 function refresh(force) {
   if (!S.me) return Promise.resolve();
   if (saveTimer || saving) return Promise.resolve();
   if (!force && M) return Promise.resolve();     // 編集中は画面を動かさない
-  return loadMonths(S.ym)               // 控えの更新は loadMonths がやってくれる
+  if (loading) return loading;                   // すでに取りに行っているなら相乗りする
+  loading = loadMonths(S.ym)             // 控えの更新は loadMonths がやってくれる
     .then(function () { if (!M) render(); })
-    .catch(function () { /* 通信が切れていても黙って次回に任せる */ });
+    .catch(function () { /* 通信が切れていても黙って次回に任せる */ })
+    .then(function () { loading = null; });
+  return loading;
 }
 
 // 見ているあいだは短い間隔で。裏に回っているあいだは通信しない
@@ -1429,7 +1441,7 @@ function bootWith(b) {
 S.ym = ymOf(new Date());
 
 // 前回の内容があれば先に描いてしまう。通信を待たずに触れるようにするため
-var cached = loadCache(S.ym);
+var cached = loadCache();
 if (cached) {
   bootWith(cached);
 } else {
@@ -1440,7 +1452,7 @@ if (cached) {
 fetchBoot(S.ym).then(function (b) {
   saveCache(b);
   if (cached) { applyBoot(b); render(); } else { bootWith(b); }
-  if (!S.months || S.months.length < 2) loadNextMonth();
+  if (!isAll(S.months)) loadNextMonth();   // 古いサーバー向けの追い読み
 }).catch(function (err) {
   if (cached) return; // 古い内容が出ているので黙って諦める
   document.getElementById('app').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
